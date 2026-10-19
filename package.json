@@ -1,0 +1,156 @@
+{
+  "name": "cex-sdd-vscode",
+  "displayName": "SDD Flow",
+  "description": "Панель AI-Native процесса CryptoExch (OpenSpec SDD) для разработчиков: шаг задачи, стопперы, прогресс плана по PR, кнопки для /cex-sdd:apply, проверок и спек",
+  "version": "0.5.1",
+  "publisher": "local",
+  "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/webdozerz/cex-sdd-vscode.git"
+  },
+  "homepage": "https://github.com/webdozerz/cex-sdd-vscode#readme",
+  "bugs": {
+    "url": "https://github.com/webdozerz/cex-sdd-vscode/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "package": "npm run type-check && npm test && node esbuild.mjs --production && vsce package --no-dependencies --skip-license"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sddFlow",
+          "title": "SDD Flow",
+          "icon": "media/flow.svg"
+        }
+      ]
+    },
+    "views": {
+      "sddFlow": [
+        {
+          "id": "sddFlow.view",
+          "name": "Задача",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "sddFlow.refresh",
+        "title": "Обновить",
+        "category": "SDD Flow",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "sddFlow.start",
+        "title": "Начать задачу",
+        "category": "SDD Flow",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "sddFlow.continue",
+        "title": "Продолжить change (/cex-sdd:apply)",
+        "category": "SDD Flow"
+      },
+      {
+        "command": "sddFlow.specGap",
+        "title": "Расхождение со спекой (/cex-sdd:spec-gap)",
+        "category": "SDD Flow"
+      },
+      {
+        "command": "sddFlow.installPlugin",
+        "title": "Установить или обновить плагин cex-sdd",
+        "category": "SDD Flow"
+      },
+      {
+        "command": "sddFlow.verify",
+        "title": "Полная проверка (verify)",
+        "category": "SDD Flow"
+      },
+      {
+        "command": "sddFlow.verifyFast",
+        "title": "Быстрая проверка (verify:fast)",
+        "category": "SDD Flow"
+      },
+      {
+        "command": "sddFlow.pickChange",
+        "title": "Выбрать change вручную",
+        "category": "SDD Flow",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "sddFlow.resetChange",
+        "title": "Сбросить выбор, определять по ветке",
+        "category": "SDD Flow"
+      },
+      {
+        "command": "sddFlow.focus",
+        "title": "Показать панель",
+        "category": "SDD Flow"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "sddFlow.start",
+          "when": "view == sddFlow.view",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sddFlow.pickChange",
+          "when": "view == sddFlow.view",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sddFlow.refresh",
+          "when": "view == sddFlow.view",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "SDD Flow",
+      "properties": {
+        "sddFlow.repoId": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "exchange",
+            "client-fe",
+            "admin-fe",
+            "qa-tests"
+          ],
+          "description": "Какому репозиторию из affected_areas соответствует этот проект. auto — по адресу origin или имени папки."
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "yaml": "^2.8.0"
+  }
+}
