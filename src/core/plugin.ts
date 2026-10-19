@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 export const PLUGIN_NAME = 'cex-sdd'
 export const MARKETPLACE_NAME = 'crypton'
@@ -61,6 +61,29 @@ function enabledIn(path: string): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined
 }
 
+interface IInstallEntry {
+  scope?: string
+  projectPath?: string
+  version?: string
+}
+
+function samePath(a: string, b: string): boolean {
+  return resolve(a).replace(/[\\/]+$/, '') === resolve(b).replace(/[\\/]+$/, '')
+}
+
+/**
+ * Какая из установок плагина действует в этом проекте — так же, как выбирает сам Claude Code:
+ * установка для этого проекта (scope project/local с projectPath), иначе пользовательская,
+ * иначе самая свежая из остальных.
+ */
+export function pickInstallEntry(entries: IInstallEntry[], projectRoot: string): IInstallEntry | undefined {
+  return (
+    entries.find((entry) => entry.projectPath !== undefined && samePath(entry.projectPath, projectRoot)) ??
+    entries.find((entry) => entry.scope === 'user') ??
+    [...entries].sort((a, b) => compareVersions(b.version ?? '0', a.version ?? '0'))[0]
+  )
+}
+
 function installCommands(marketplaceKnown: boolean): string[] {
   return marketplaceKnown
     ? [`claude plugin install ${PLUGIN_ID}`]
@@ -81,9 +104,9 @@ export function readPluginStatus(home: string, projectRoot: string): IPluginStat
   if (installedRaw === BROKEN || knownRaw === BROKEN) return { state: 'unknown', version: null, commands: [] }
 
   // Файлов нет совсем — плагины ещё ни разу не ставились: значит, и cex-sdd нет.
-  const installed = installedRaw as { plugins?: Record<string, Array<{ version?: string }>> } | undefined
+  const installed = installedRaw as { plugins?: Record<string, IInstallEntry[]> } | undefined
   const known = knownRaw as Record<string, unknown> | undefined
-  const entry = installed?.plugins?.[PLUGIN_ID]?.[0]
+  const entry = pickInstallEntry(installed?.plugins?.[PLUGIN_ID] ?? [], projectRoot)
   if (!entry) {
     return { state: 'missing', version: null, commands: installCommands(Boolean(known && MARKETPLACE_NAME in known)) }
   }

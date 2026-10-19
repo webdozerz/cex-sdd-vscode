@@ -99,6 +99,42 @@ describe('readPluginStatus', () => {
   })
 })
 
+describe('выбор установки как в Claude Code', () => {
+  const project = '/home/dev/Projects/SE/exchange'
+  const entries = (list: object[]) => JSON.stringify({ version: 2, plugins: { 'cex-sdd@crypton': list } })
+
+  it('установка этого проекта важнее пользовательской и стоящей первой', () => {
+    const home = makeProject({
+      [`${PLUGINS}/installed_plugins.json`]: entries([
+        { scope: 'user', version: '0.5.0' },
+        { scope: 'project', projectPath: '/other/repo', version: '0.4.0' },
+        { scope: 'project', projectPath: `${project}/`, version: '0.6.0' },
+      ]),
+    })
+    expect(readPluginStatus(home, project)).toMatchObject({ state: 'ok', version: '0.6.0' })
+  })
+
+  it('чужой проект не учитывается: берётся пользовательская', () => {
+    const home = makeProject({
+      [`${PLUGINS}/installed_plugins.json`]: entries([
+        { scope: 'project', projectPath: '/other/repo', version: '0.6.0' },
+        { scope: 'user', version: '0.5.0' },
+      ]),
+    })
+    expect(readPluginStatus(home, project)).toMatchObject({ state: 'outdated', version: '0.5.0' })
+  })
+
+  it('нет ни своей, ни пользовательской — самая свежая', () => {
+    const home = makeProject({
+      [`${PLUGINS}/installed_plugins.json`]: entries([
+        { scope: 'local', projectPath: '/a', version: '0.5.0' },
+        { scope: 'local', projectPath: '/b', version: '0.6.1' },
+      ]),
+    })
+    expect(readPluginStatus(home, project)).toMatchObject({ state: 'ok', version: '0.6.1' })
+  })
+})
+
 describe('плагин в ленте', () => {
   const missing: IPluginStatus = { state: 'missing', version: null, commands: ['claude plugin install cex-sdd@crypton'] }
 

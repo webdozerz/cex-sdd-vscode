@@ -2,7 +2,7 @@
   "name": "cex-sdd-vscode",
   "displayName": "SDD Flow",
   "description": "Панель AI-Native процесса CryptoExch (OpenSpec SDD) для разработчиков: шаг задачи, стопперы, прогресс плана по PR, кнопки для /cex-sdd:apply, проверок и спек",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "publisher": "local",
   "private": true,
   "license": "UNLICENSED",

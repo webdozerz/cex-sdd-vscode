@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { basename, isAbsolute, relative, resolve } from 'node:path'
+import { basename, isAbsolute, join, relative, resolve } from 'node:path'
 
 import * as vscode from 'vscode'
 
@@ -124,6 +124,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       watcher.onDidDelete(scheduleRefresh)
       context.subscriptions.push(watcher)
     }
+    // Установка или обновление плагина cex-sdd в терминале: панель обновляется сразу, а не по опросу.
+    const pluginsWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(vscode.Uri.file(join(homedir(), '.claude', 'plugins')), 'installed_plugins.json'),
+    )
+    pluginsWatcher.onDidCreate(scheduleRefresh)
+    pluginsWatcher.onDidChange(scheduleRefresh)
+    context.subscriptions.push(pluginsWatcher)
+
     // Сабмодуль и origin/develop обновляются через git, а не через редактор: события файлов могут не прийти.
     const poll = setInterval(scheduleRefresh, POLL_INTERVAL_MS)
     context.subscriptions.push({ dispose: () => clearInterval(poll) })
