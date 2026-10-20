@@ -36,17 +36,17 @@ describe('id шагов и PR (решение 1В)', () => {
 
   it('состояние шага берётся из PR, plan.md не правится', () => {
     const prs: IPrSteps[] = [
-      { number: 370, state: 'MERGED', branch: 'feat/SE-1485-liquidity-base', steps: ['base'] },
-      { number: 371, state: 'OPEN', branch: 'feat/SE-1485-modal-test-ids', steps: ['modals'] },
-      { number: 360, state: 'CLOSED', branch: 'feat/SE-1485-old', steps: ['integration'] },
+      { number: 370, state: 'MERGED', branch: 'feat/TN-1485-liquidity-base', steps: ['base'] },
+      { number: 371, state: 'OPEN', branch: 'feat/TN-1485-modal-test-ids', steps: ['modals'] },
+      { number: 360, state: 'CLOSED', branch: 'feat/TN-1485-old', steps: ['integration'] },
     ]
-    const other = mergePlan(parsePlan(PLAN), { develop: PLAN, branches: [], prs }, null, 'feat/SE-1485-venues')
+    const other = mergePlan(parsePlan(PLAN), { develop: PLAN, branches: [], prs }, null, 'feat/TN-1485-venues')
     expect(other.tasks.flatMap((t) => t.steps.map((s) => [s.stepId, s.state, s.branch ?? null]))).toEqual([
       ['base', 'merged', null],
-      ['modals', 'review', '#371 feat/SE-1485-modal-test-ids'],
+      ['modals', 'review', '#371 feat/TN-1485-modal-test-ids'],
       ['integration', 'todo', null], // закрытый без мержа PR не засчитывается
     ])
-    const own = mergePlan(parsePlan(PLAN), { develop: PLAN, branches: [], prs }, null, 'feat/SE-1485-modal-test-ids')
+    const own = mergePlan(parsePlan(PLAN), { develop: PLAN, branches: [], prs }, null, 'feat/TN-1485-modal-test-ids')
     expect(own.tasks[0].steps[1].state).toBe('local')
   })
 
@@ -66,14 +66,14 @@ describe('временные исключения (решение 4А)', () => {
 
   it('метки из git grep для любого языка', () => {
     const output = [
-      'src/a.ts:12:  // sdd-temp(SE-1485): право не проверяется до SE-1484',
-      'internal/x.go:7:\t// sdd-temp(se-1484): заглушка',
-      'src/b.vue:3:<!-- sdd-temp(SE-1485): моки -->',
+      'src/a.ts:12:  // sdd-temp(TN-1485): право не проверяется до TN-1484',
+      'internal/x.go:7:\t// sdd-temp(tn-1484): заглушка',
+      'src/b.vue:3:<!-- sdd-temp(TN-1485): моки -->',
     ].join('\n')
     expect(parseTempMarkers(output)).toEqual([
-      { file: 'src/a.ts', line: 12, key: 'SE-1485', text: 'право не проверяется до SE-1484' },
-      { file: 'internal/x.go', line: 7, key: 'SE-1484', text: 'заглушка' },
-      { file: 'src/b.vue', line: 3, key: 'SE-1485', text: 'моки' },
+      { file: 'src/a.ts', line: 12, key: 'TN-1485', text: 'право не проверяется до TN-1484' },
+      { file: 'internal/x.go', line: 7, key: 'TN-1484', text: 'заглушка' },
+      { file: 'src/b.vue', line: 3, key: 'TN-1485', text: 'моки' },
     ])
   })
 
@@ -85,7 +85,7 @@ describe('временные исключения (решение 4А)', () => {
     }
     const model = await loadFlowModel({
       root: makeProject({ ...SPEC_FILES, [`${DESIGN}/design.md`]: design, [`${DESIGN}/plan.md`]: plan }),
-      branch: 'feat/SE-130-x',
+      branch: 'feat/TN-130-x',
       remoteUrl: null,
       repoSetting: 'client-fe',
       overrideChange: null,
@@ -98,7 +98,7 @@ describe('временные исключения (решение 4А)', () => {
   const TABLE = '# Design\n\n## Временные исключения\n\n| Что | Где |\n| --- | --- |\n| право | src/a.ts |\n'
 
   it('в работе — инфо со ссылкой на строку; чужие ключи не учитываются', async () => {
-    const flow = await load(PLAN, TABLE, [marker('SE-130'), marker('SE-999')])
+    const flow = await load(PLAN, TABLE, [marker('TN-130'), marker('TN-999')])
     expect(flow.tempMarkers).toHaveLength(1)
     expect(flow.blockers.find((b) => b.id === 'temp-exceptions')).toMatchObject({ severity: 'info', file: 'src/a.ts:3' })
     expect(flow.blockers.some((b) => b.id.startsWith('temp-table'))).toBe(false)
@@ -106,14 +106,14 @@ describe('временные исключения (решение 4А)', () => {
 
   it('перед «Интеграцией» — ошибка и подсказка снять', async () => {
     const plan = PLAN.replace(/\[ \] <!-- step: (base|modals)/g, '[x] <!-- step: $1')
-    const flow = await load(plan, TABLE, [marker('SE-130')])
+    const flow = await load(plan, TABLE, [marker('TN-130')])
     expect(flow.blockers[0]).toMatchObject({ id: 'temp-exceptions', severity: 'error' })
     expect(flow.next).toContain('Снять стоппер')
   })
 
   it('таблица и метки расходятся или таблицы нет', async () => {
     expect((await load(PLAN, TABLE, [])).blockers.map((b) => b.id)).toContain('temp-table-mismatch')
-    expect((await load(PLAN, '# Design\n', [marker('SE-130')])).blockers.map((b) => b.id)).toContain('temp-table-missing')
+    expect((await load(PLAN, '# Design\n', [marker('TN-130')])).blockers.map((b) => b.id)).toContain('temp-table-missing')
   })
 })
 
@@ -148,19 +148,19 @@ describe('текущий шаг ветки', () => {
   }
 
   it('в ветке есть изменения → предположительно первый свободный шаг, «Дальше» — следующий за ним', async () => {
-    const flow = await load('feat/SE-130-limits-form', true)
+    const flow = await load('feat/TN-130-limits-form', true)
     expect(flow.currentStep).toEqual({ title: 'Форма лимитов', section: '2.2 Изменения', exact: false })
     expect(flow.next).toContain('Следующий шаг после текущего: **Ещё шаг.**')
     expect(flow.plan?.tasks[0].active).toBe(true)
   })
 
   it('шаг отмечен в этой ветке → точно он', async () => {
-    const flow = await load('feat/SE-130-x', false, true)
+    const flow = await load('feat/TN-130-x', false, true)
     expect(flow.currentStep).toMatchObject({ title: 'Ещё шаг', exact: true })
   })
 
   it('ветка без изменений или design-ветка → текущего шага нет', async () => {
-    expect((await load('feat/SE-130-x', false)).currentStep).toBeNull()
-    expect((await load('feat/SE-130-x-design', true)).currentStep).toBeNull()
+    expect((await load('feat/TN-130-x', false)).currentStep).toBeNull()
+    expect((await load('feat/TN-130-x-design', true)).currentStep).toBeNull()
   })
 })

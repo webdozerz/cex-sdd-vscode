@@ -5,10 +5,10 @@ import { escapeHtml, renderBody, renderDocument, renderInline } from '../src/ui/
 
 const FLOW: IChangeFlow = {
   kind: 'change',
-  key: 'SE-130',
-  jira: 'SE-123',
-  branch: 'feat/SE-130-x',
-  changeName: 'se-123-<b>x</b>',
+  key: 'TN-130',
+  jira: 'TN-123',
+  branch: 'feat/TN-130-x',
+  changeName: 'tn-123-<b>x</b>',
   tier: 1,
   repoId: 'client-fe',
   areas: ['client-fe'],
@@ -45,7 +45,7 @@ describe('render', () => {
     const html = renderBody(FLOW)
     expect(html).toContain('class="primary" data-action="continue"')
     expect(html).toContain('class="secondary" data-action="spec-gap"')
-    expect(html).toContain('родитель SE-123')
+    expect(html).toContain('родитель TN-123')
   })
 
   it('показывает прогресс плана', () => {
@@ -95,11 +95,11 @@ describe('render', () => {
   it('временные исключения: список с переходом к строке', () => {
     const html = renderBody({
       ...FLOW,
-      tempMarkers: [{ file: 'src/a.ts', line: 12, key: 'SE-130', text: 'право не проверяется до `SE-131`' }],
+      tempMarkers: [{ file: 'src/a.ts', line: 12, key: 'TN-130', text: 'право не проверяется до `TN-131`' }],
     })
     expect(html).toContain('<h2>Временные исключения</h2>')
     expect(html).toContain('data-open="src/a.ts:12"')
-    expect(html).toContain('<code>SE-131</code>')
+    expect(html).toContain('<code>TN-131</code>')
   })
 
   it('«Сейчас в этой ветке» и отметка раздела', () => {

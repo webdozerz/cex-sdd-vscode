@@ -16,10 +16,11 @@ afterEach(cleanupProjects)
 
 describe('parseIssueKey', () => {
   it.each([
-    ['feat/SE-130-limits-form', 'SE-130'],
-    ['se-7-fix', 'SE-7'],
-    ['SE-4521', 'SE-4521'],
-    ['fix/ISE-12', null],
+    ['feat/TN-130-limits-form', 'TN-130'],
+    ['TN-4521', 'TN-4521'],
+    ['fix/ABC-7-buttons', 'ABC-7'],
+    ['fix/ui-2-buttons', null],
+    ['feat/limits-TN-12', null],
     ['develop', null],
   ])('%s → %s', (branch, expected) => {
     expect(parseIssueKey(branch)).toBe(expected)
@@ -32,18 +33,18 @@ describe('parseIssueKey', () => {
 
 describe('имена', () => {
   it('префикс и slug change', () => {
-    expect(changePrefix('SE-123')).toBe('se-123-')
-    expect(slugFromChange('se-123-withdraw-limits')).toBe('withdraw-limits')
+    expect(changePrefix('TN-123')).toBe('tn-123-')
+    expect(slugFromChange('tn-123-withdraw-limits')).toBe('withdraw-limits')
   })
 
   it('ветка по правилам процесса, с суффиксом для design PR', () => {
-    expect(buildBranchName('SE-130', 'limits-form', false)).toBe('feat/SE-130-limits-form')
-    expect(buildBranchName('se-130', 'limits-form', true)).toBe('feat/SE-130-limits-form-design')
+    expect(buildBranchName('TN-130', 'limits-form', false)).toBe('feat/TN-130-limits-form')
+    expect(buildBranchName('tn-130', 'limits-form', true)).toBe('feat/TN-130-limits-form-design')
   })
 
   it('fix-ветки', () => {
-    expect(isFixBranch('fix/SE-124-x')).toBe(true)
-    expect(isFixBranch('feat/SE-124-x')).toBe(false)
+    expect(isFixBranch('fix/TN-124-x')).toBe(true)
+    expect(isFixBranch('feat/TN-124-x')).toBe(false)
     expect(isFixBranch(null)).toBe(false)
   })
 })

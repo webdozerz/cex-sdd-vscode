@@ -103,7 +103,7 @@ export function countTempTableRows(designMarkdown: string): number | null {
 export function parseTempMarkers(grepOutput: string): Array<{ file: string; line: number; key: string; text: string }> {
   return grepOutput.split('\n').flatMap((row) => {
     const match = row.match(/^(.+?):(\d+):(.*)$/)
-    const marker = match?.[3].match(/sdd-temp\((SE-\d+)\)\s*:?\s*(.*)$/i)
+    const marker = match?.[3].match(/sdd-temp\(([A-Z][A-Z0-9]+-\d+)\)\s*:?\s*(.*)$/i)
     if (!match || !marker) return []
     const text = marker[2].replace(/\s*(\*\/|-->)\s*$/, '').trim()
     return [{ file: match[1], line: Number(match[2]), key: marker[1].toUpperCase(), text }]

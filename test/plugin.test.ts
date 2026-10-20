@@ -156,7 +156,7 @@ describe('плагин в ленте', () => {
   const loadChange = async (plugin: IPluginStatus) => {
     const model = await loadFlowModel({
       root: makeProject({ ...SPEC_FILES, ...DESIGN_FILES }),
-      branch: 'feat/SE-130-limits-form',
+      branch: 'feat/TN-130-limits-form',
       remoteUrl: null,
       repoSetting: 'client-fe',
       overrideChange: null,

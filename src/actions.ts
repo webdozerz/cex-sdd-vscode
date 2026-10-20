@@ -187,7 +187,7 @@ export async function startTask(deps: IActionDeps): Promise<void> {
     title: 'Ключ вашей задачи Jira',
     prompt: 'Он пойдёт в имя ветки, коммиты и заголовок PR. Подзадача или родитель, как принято у вас.',
     value: suggestedKey,
-    validateInput: (value) => (/^SE-\d+$/i.test(value.trim()) ? null : 'Формат: SE-123'),
+    validateInput: (value) => (/^[A-Z][A-Z0-9]+-\d+$/i.test(value.trim()) ? null : 'Формат: TN-123'),
   })
   if (!key) return
 
@@ -287,7 +287,7 @@ export async function bumpSpecs(deps: IActionDeps): Promise<void> {
     {
       modal: true,
       detail:
-        'По правилам процесса указатель обновляется отдельным коммитом chore(SE-…): bump openspec, который мержится в develop до начала работы. Не смешивайте его с кодом.',
+        'По правилам процесса указатель обновляется отдельным коммитом chore(TN-…): bump openspec, который мержится в develop до начала работы. Не смешивайте его с кодом.',
     },
     'Обновить',
   )

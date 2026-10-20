@@ -33,7 +33,7 @@ export interface ITaskItem {
   done: boolean
 }
 
-/** Группа задач одного репозитория в tasks.md: `## 2. client-fe (SE-130)`. */
+/** Группа задач одного репозитория в tasks.md: `## 2. client-fe (TN-130)`. */
 export interface ITasksGroup {
   repo: string
   /** Ключ подзадачи Jira из заголовка группы, если он там записан. */
@@ -65,7 +65,7 @@ export interface IPrSteps {
   steps: string[]
 }
 
-/** Метка временного исключения в коде: `sdd-temp(SE-1485): право не проверяется до SE-1484`. */
+/** Метка временного исключения в коде: `sdd-temp(TN-1485): право не проверяется до TN-1484`. */
 export interface ITempMarker {
   file: string
   line: number

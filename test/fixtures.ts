@@ -20,17 +20,17 @@ export function cleanupProjects(): void {
   for (const root of created.splice(0)) rmSync(root, { recursive: true, force: true })
 }
 
-export const CHANGE_NAME = 'se-123-withdraw-limits'
+export const CHANGE_NAME = 'tn-123-withdraw-limits'
 export const CHANGE = `openspec/changes/${CHANGE_NAME}`
 export const DESIGN = `docs/changes/${CHANGE_NAME}`
 
-/** Спека change: tier 1, затронуты exchange и client-fe; у фронта своя подзадача SE-130. */
+/** Спека change: tier 1, затронуты exchange и client-fe; у фронта своя подзадача TN-130. */
 export const SPEC_FILES: Record<string, string> = {
   [`${CHANGE}/.openspec.yaml`]: 'schema: cex-sdd\naffected_areas:\n  - exchange\n  - client-fe\n',
-  [`${CHANGE}/meta.yaml`]: 'jira: SE-123\ntier: 1\nbreaking: false\n',
+  [`${CHANGE}/meta.yaml`]: 'jira: TN-123\ntier: 1\nbreaking: false\n',
   [`${CHANGE}/proposal.md`]: '# Proposal: Лимиты на вывод\n\n## Why\n',
   [`${CHANGE}/tasks.md`]:
-    '# Tasks\n\n## 1. exchange (SE-131)\n\n- [ ] 1.1 API\n\n## 2. client-fe (SE-130)\n\n- [ ] 2.1 Форма\n- [ ] 2.2 Ошибки\n',
+    '# Tasks\n\n## 1. exchange (TN-131)\n\n- [ ] 1.1 API\n\n## 2. client-fe (TN-130)\n\n- [ ] 2.1 Форма\n- [ ] 2.2 Ошибки\n',
 }
 
 export const DESIGN_FILES: Record<string, string> = {

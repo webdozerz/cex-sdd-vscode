@@ -169,7 +169,7 @@ export function renderBody(model: TFlowModel): string {
     case 'no-key':
       return `<p class="muted">${
         model.branch
-          ? `В ветке <b>${escapeHtml(model.branch)}</b> нет ключа задачи SE-NNN.`
+          ? `В ветке <b>${escapeHtml(model.branch)}</b> нет ключа задачи TN-NNN.`
           : 'Не удалось определить ветку.'
       }</p>
       ${renderActions(model.actions)}

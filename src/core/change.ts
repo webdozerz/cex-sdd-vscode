@@ -17,14 +17,14 @@ export interface IChangeInfo {
   tier: number | null
   jira: string | null
   areas: TRepoId[]
-  /** Ключи подзадач из заголовков групп tasks.md: { 'client-fe': 'SE-130' }. */
+  /** Ключи подзадач из заголовков групп tasks.md: { 'client-fe': 'TN-130' }. */
   groupKeys: Record<string, string>
 }
 
 export type TResolvedVia = 'override' | 'task-key' | 'prefix' | 'branch-files'
 
 export interface IResolveInput {
-  /** Ключ из ветки (SE-130) или null. */
+  /** Ключ из ветки (TN-130) или null. */
   key: string | null
   /** Change, выбранный вручную. */
   override: string | null
@@ -112,7 +112,7 @@ export function listChanges(root: string): IChangeInfo[] {
   })
 }
 
-/** Change, в tasks.md которого есть группа с этим ключом: `## 2. client-fe (SE-130)`. */
+/** Change, в tasks.md которого есть группа с этим ключом: `## 2. client-fe (TN-130)`. */
 export function findChangeByTaskKey(root: string, key: string): string | null {
   const wanted = key.toUpperCase()
   return listChanges(root).find((info) => Object.values(info.groupKeys).includes(wanted))?.name ?? null
@@ -135,7 +135,7 @@ export function resolveChangeName(
     const prefix = changePrefix(input.key)
     const byPrefix = listActiveChanges(root).find((name) => name.startsWith(prefix))
     if (byPrefix) return { name: byPrefix, via: 'prefix' }
-    // Архив: каталог называется `<дата>-se-123-slug`.
+    // Архив: каталог называется `<дата>-tn-123-slug`.
     const archived = listDirs(join(root, SPEC_CHANGES, 'archive')).find((dir) => dir.includes(`-${prefix}`))
     if (archived) return { name: archived.slice(archived.indexOf(prefix)), via: 'prefix' }
   }

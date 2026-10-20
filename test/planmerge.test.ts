@@ -8,12 +8,12 @@ import { CHANGE, DESIGN, SPEC_FILES, cleanupProjects, makeProject } from './fixt
 
 afterEach(cleanupProjects)
 
-/** Как реальный plan.md SE-1485: разделы без tasks.md, шаг дизайна, жирные названия шагов. */
+/** Как типичный plan.md TN-1485: разделы без tasks.md, шаг дизайна, жирные названия шагов. */
 const plan = (checks: { design?: boolean; base?: boolean; modals?: boolean; screen?: boolean } = {}): string => `# План
 
 ## 0. Дизайн
 
-- [${checks.design ? 'x' : ' '}] \`design.md\`, \`plan.md\`, \`spec-gaps.md\` — PR \`SE-1485: design\` — проверка: ревью
+- [${checks.design ? 'x' : ' '}] \`design.md\`, \`plan.md\`, \`spec-gaps.md\` — PR \`TN-1485: design\` — проверка: ревью
 
 ## Общее (для 2.1–2.3)
 
@@ -46,13 +46,13 @@ describe('mergePlan', () => {
   it('новая ветка от develop: шаги из других веток не «сбрасываются»', () => {
     const merged = mergePlan(
       parsePlan(plan()),
-      { develop: plan(), branches: [{ name: 'feat/SE-1485-liquidity-base', text: plan({ design: true, base: true }) }] },
+      { develop: plan(), branches: [{ name: 'feat/TN-1485-liquidity-base', text: plan({ design: true, base: true }) }] },
       true,
     )
     const states = merged.tasks.flatMap((task) => task.steps.map((step) => [step.state, step.branch ?? null]))
     expect(states).toEqual([
       ['merged', null], // дизайн смержен, хоть галочку и не поставили
-      ['review', 'feat/SE-1485-liquidity-base'],
+      ['review', 'feat/TN-1485-liquidity-base'],
       ['todo', null],
       ['todo', null],
     ])
@@ -82,12 +82,12 @@ describe('план в ленте с несколькими ветками', () =
       isDesignMerged: async () => true,
       planSources: async () => ({
         develop: plan(),
-        branches: [{ name: 'feat/SE-130-liquidity-base', text: plan({ design: true, base: true }) }],
+        branches: [{ name: 'feat/TN-130-liquidity-base', text: plan({ design: true, base: true }) }],
       }),
     }
     const model = await loadFlowModel({
       root: makeProject({ ...SPEC_FILES, [`${DESIGN}/design.md`]: '# Design', [`${DESIGN}/plan.md`]: plan() }),
-      branch: 'feat/SE-130-modal-test-ids',
+      branch: 'feat/TN-130-modal-test-ids',
       remoteUrl: null,
       repoSetting: 'client-fe',
       overrideChange: null,
@@ -95,7 +95,7 @@ describe('план в ленте с несколькими ветками', () =
     })
     if (model.kind !== 'change') throw new Error('ожидался change')
     expect(model.plan).toMatchObject({ done: 2, total: 4, merged: 1, review: 1, local: 0 })
-    expect(model.plan?.inReview).toEqual([{ branch: 'feat/SE-130-liquidity-base', steps: 1 }])
+    expect(model.plan?.inReview).toEqual([{ branch: 'feat/TN-130-liquidity-base', steps: 1 }])
     expect(model.next).toContain('Следующий свободный шаг плана: **Общие модалки.**')
     expect(CHANGE).toBeTruthy()
   })

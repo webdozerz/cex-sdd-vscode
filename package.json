@@ -2,7 +2,7 @@
   "name": "cex-sdd-vscode",
   "displayName": "SDD Flow",
   "description": "Панель AI-Native процесса (OpenSpec SDD) для разработчиков: шаг задачи, стопперы, прогресс плана по PR, кнопки для /cex-sdd:apply, проверок и спек",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "publisher": "local",
   "private": true,
   "license": "UNLICENSED",

@@ -1,25 +1,29 @@
 import { REPO_IDS, type TRepoId } from './types'
 
-const ISSUE_KEY_RE = /\bSE-(\d+)\b/i
+/** Ключ задачи трекера: `TN-130` — проект из заглавных букв и цифр, дефис, номер. */
+const ISSUE_KEY = '[A-Z][A-Z0-9]+-\\d+'
 
-/** Ключ задачи из имени ветки: `feat/SE-130-limits-form` → `SE-130`. */
+/** Ключ в начале имени ветки или сразу после `тип/`: `feat/TN-130-slug`. */
+const ISSUE_KEY_RE = new RegExp(`(?:^|/)(${ISSUE_KEY})(?=$|[-_./])`)
+
+/** Ключ задачи из имени ветки: `feat/TN-130-limits-form` → `TN-130`. */
 export function parseIssueKey(branch: string | null | undefined): string | null {
   const match = branch?.match(ISSUE_KEY_RE)
-  return match ? `SE-${match[1]}` : null
+  return match ? match[1] : null
 }
 
-/** Префикс имени change: `SE-123` → `se-123-`. */
+/** Префикс имени change: `TN-123` → `tn-123-`. */
 export function changePrefix(key: string): string {
   return `${key.toLowerCase()}-`
 }
 
-/** `se-123-withdraw-limits` → `withdraw-limits`. */
+/** `tn-123-withdraw-limits` → `withdraw-limits`. */
 export function slugFromChange(changeName: string): string {
-  return changeName.replace(/^se-\d+-/i, '')
+  return changeName.replace(/^[a-z][a-z0-9]+-\d+-/i, '')
 }
 
 /**
- * Имя ветки по правилам процесса: `feat/SE-130-slug`; для design PR (tier 1–2) — с суффиксом `-design`.
+ * Имя ветки по правилам процесса: `feat/TN-130-slug`; для design PR (tier 1–2) — с суффиксом `-design`.
  * Ключ — задача разработчика (подзадача), не обязательно родитель change.
  */
 export function buildBranchName(key: string, slug: string, design: boolean): string {

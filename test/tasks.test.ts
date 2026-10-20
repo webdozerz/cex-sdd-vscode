@@ -11,7 +11,7 @@ const SAMPLE = `# Tasks
 - [x] 1.1 Лимиты вывода в API — проверка: scenario A
 - [ ] 1.2 Хранение лимитов — проверка: интеграционный тест
 
-## 2. client-fe (SE-130)
+## 2. client-fe (TN-130)
 
 Зависимость: стартует от contract/openapi.yaml
 
@@ -21,7 +21,7 @@ const SAMPLE = `# Tasks
 
 ## Проверка после развёртывания
 
-- Проверить лимиты на stage — QA, SE-130
+- Проверить лимиты на stage — QA, TN-130
 `
 
 describe('parseTasks', () => {
@@ -32,7 +32,7 @@ describe('parseTasks', () => {
   })
 
   it('читает ключ подзадачи из заголовка группы', () => {
-    expect(groups.map((group) => group.key)).toEqual([null, 'SE-130'])
+    expect(groups.map((group) => group.key)).toEqual([null, 'TN-130'])
   })
 
   it('читает состояние чекбоксов и номера', () => {
@@ -54,7 +54,7 @@ describe('parseTasks', () => {
 })
 
 describe('parsePlan', () => {
-  const plan = parsePlan(`# План: se-123 (client-fe)
+  const plan = parsePlan(`# План: tn-123 (client-fe)
 
 ## tasks.md 2.1 — Форма — готово
 - [x] Каркас — проверка: vitest
@@ -87,7 +87,7 @@ describe('parsePlan', () => {
 
 describe('proposalTitle', () => {
   it('голый заголовок «Proposal» — первая фраза из «Why»', () => {
-    const md = '# Proposal\n\nJira: SE-1\n\n## Why\n\nКлиенты переписывают сделки вручную. Это долго.\n\n## What Changes\n'
+    const md = '# Proposal\n\nJira: TN-1\n\n## Why\n\nКлиенты переписывают сделки вручную. Это долго.\n\n## What Changes\n'
     expect(proposalTitle(md)).toBe('Клиенты переписывают сделки вручную.')
   })
 
@@ -117,7 +117,7 @@ describe('parseSpecGaps', () => {
 ## 2. Имя файла
 
 - **Блокирует:** шаг 2.3
-- **Решение:** обновить change, SE-140
+- **Решение:** обновить change, TN-140
 `)
 
   it('шаблон в угловых скобках — расхождение открыто', () => {

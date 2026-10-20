@@ -184,7 +184,7 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
       title: `Не найден change для ${state.key}`,
       hint: fix
         ? 'Если задача без спеки — PR получает метку no-spec и строку «Без спеки: причина». Если change есть, выберите его вручную'
-        : 'Ключ подзадачи с change связан через родителя в Jira, по имени change его не найти: выберите change вручную. Если change нет в списке, подтяните спеку: нужен отдельный коммит chore(SE-…): bump openspec',
+        : 'Ключ подзадачи с change связан через родителя в Jira, по имени change его не найти: выберите change вручную. Если change нет в списке, подтяните спеку: нужен отдельный коммит chore(TN-…): bump openspec',
     })
     return blockers
   }
@@ -304,7 +304,7 @@ function computeNext(state: IChangeState, blockers: IBlocker[], current: ILocate
   if (state.acceptance.accepted) return 'Приёмка пройдена, change ждёт архивации'
   if (!state.hasDesign) return 'Спроектировать: /cex-sdd:apply напишет design.md и plan.md и спросит согласия'
   if (needsDesignPr(state) && state.designMerged === false) {
-    return 'Открыть PR с дизайном (заголовок «SE-…: design …») и дождаться мержа'
+    return 'Открыть PR с дизайном (заголовок «TN-…: design …») и дождаться мержа'
   }
   if (state.tempMarkers.length > 0 && isIntegrationTime(state)) {
     return 'Снять временные исключения: метки sdd-temp в коде и строки таблицы в design.md'

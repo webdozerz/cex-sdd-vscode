@@ -21,7 +21,7 @@ async function load(files: Record<string, string>, options: ILoadOptions = {}): 
   }
   const model = await loadFlowModel({
     root: makeProject(files),
-    branch: options.branch ?? 'feat/SE-130-limits-form',
+    branch: options.branch ?? 'feat/TN-130-limits-form',
     remoteUrl: 'git@github.com:CryptoExch/client-frontend-v2.git',
     repoSetting: 'auto',
     overrideChange: options.override ?? null,
@@ -36,32 +36,32 @@ const blockerIds = (flow: IChangeFlow) => flow.blockers.map((blocker) => blocker
 const actionIds = (flow: IChangeFlow): TActionId[] => flow.actions.map((action) => action.id)
 
 describe('определение change по ветке', () => {
-  it('ключ подзадачи из tasks.md: SE-130 → se-123-…', async () => {
+  it('ключ подзадачи из tasks.md: TN-130 → tn-123-…', async () => {
     const flow = await load({ ...SPEC_FILES })
     expect(flow.changeName).toBe(CHANGE_NAME)
-    expect(flow.key).toBe('SE-130')
-    expect(flow.jira).toBe('SE-123')
+    expect(flow.key).toBe('TN-130')
+    expect(flow.jira).toBe('TN-123')
   })
 
   it('ключ родителя совпадает с префиксом имени change', async () => {
-    const flow = await load({ ...SPEC_FILES }, { branch: 'feat/SE-123-limits' })
+    const flow = await load({ ...SPEC_FILES }, { branch: 'feat/TN-123-limits' })
     expect(flow.changeName).toBe(CHANGE_NAME)
   })
 
   it('файлы ветки в docs/changes указывают на change, когда ключ ничего не даёт', async () => {
     const files = { ...SPEC_FILES, [`${CHANGE}/tasks.md`]: '## 2. client-fe\n\n- [ ] 2.1 Форма\n' }
-    const flow = await load(files, { branch: 'feat/SE-777-x', branchChanges: [CHANGE_NAME] })
+    const flow = await load(files, { branch: 'feat/TN-777-x', branchChanges: [CHANGE_NAME] })
     expect(flow.changeName).toBe(CHANGE_NAME)
   })
 
   it('несколько changes в файлах ветки — не гадаем', async () => {
     const files = { ...SPEC_FILES, [`${CHANGE}/tasks.md`]: '## 2. client-fe\n\n- [ ] 2.1 Форма\n' }
-    const flow = await load(files, { branch: 'feat/SE-777-x', branchChanges: [CHANGE_NAME, 'se-9-other'] })
+    const flow = await load(files, { branch: 'feat/TN-777-x', branchChanges: [CHANGE_NAME, 'tn-9-other'] })
     expect(blockerIds(flow)).toEqual(['change-not-found'])
   })
 
   it('ручной выбор приоритетнее остального', async () => {
-    const flow = await load({ ...SPEC_FILES }, { branch: 'feat/SE-999-x', override: CHANGE_NAME })
+    const flow = await load({ ...SPEC_FILES }, { branch: 'feat/TN-999-x', override: CHANGE_NAME })
     expect(flow.changeName).toBe(CHANGE_NAME)
   })
 
@@ -79,7 +79,7 @@ describe('определение change по ветке', () => {
 
   it('ветка без ключа, но change выбран вручную — берём ключ из meta.yaml', async () => {
     const flow = await load({ ...SPEC_FILES }, { branch: 'chore/misc', override: CHANGE_NAME })
-    expect(flow.key).toBe('SE-123')
+    expect(flow.key).toBe('TN-123')
   })
 })
 
@@ -91,13 +91,13 @@ describe('стопперы', () => {
   })
 
   it('change не найден в feat-ветке — ошибка, предлагает выбрать или обновить спеки', async () => {
-    const flow = await load({ 'openspec/changes/se-999-other/.openspec.yaml': 'affected_areas: [exchange]\n' })
+    const flow = await load({ 'openspec/changes/tn-999-other/.openspec.yaml': 'affected_areas: [exchange]\n' })
     expect(flow.blockers[0]).toMatchObject({ id: 'change-not-found', severity: 'error' })
     expect(actionIds(flow)).toEqual(['pick-change', 'bump-specs'])
   })
 
   it('change не найден в fix-ветке — только инфо про no-spec', async () => {
-    const flow = await load({ 'openspec/changes/se-999-other/.openspec.yaml': 'affected_areas: [exchange]\n' }, { branch: 'fix/SE-124-btn' })
+    const flow = await load({ 'openspec/changes/tn-999-other/.openspec.yaml': 'affected_areas: [exchange]\n' }, { branch: 'fix/TN-124-btn' })
     expect(flow.blockers[0]).toMatchObject({ id: 'change-not-found', severity: 'info' })
     expect(flow.blockers[0].hint).toContain('no-spec')
   })
@@ -126,7 +126,7 @@ describe('стопперы', () => {
   })
 
   it('tier 3: дизайн идёт в одном PR с кодом, мерж дизайна не требуется', async () => {
-    const files = { ...SPEC_FILES, ...DESIGN_FILES, [`${CHANGE}/meta.yaml`]: 'jira: SE-123\ntier: 3\nbreaking: false\n' }
+    const files = { ...SPEC_FILES, ...DESIGN_FILES, [`${CHANGE}/meta.yaml`]: 'jira: TN-123\ntier: 3\nbreaking: false\n' }
     const flow = await load(files, { designMerged: false })
     expect(blockerIds(flow)).toEqual([])
     expect(statusOf(flow, 'design')).toBe('done')
@@ -185,7 +185,7 @@ describe('прогресс и подсказки', () => {
     expect(statusOf(flow, 'code')).toBe('done')
     expect(statusOf(flow, 'pr')).toBe('current')
     expect(statusOf(flow, 'dev')).toBe('unknown')
-    expect(flow.next).toContain('Открыть PR в develop: заголовок «SE-130')
+    expect(flow.next).toContain('Открыть PR в develop: заголовок «TN-130')
   })
 
   it('приёмка принята: ждёт архивации, кнопок нет', async () => {
@@ -200,7 +200,7 @@ describe('прогресс и подсказки', () => {
   it('change в архиве: всё выполнено', async () => {
     const flow = await load(
       { [`openspec/changes/archive/2026-10-01-${CHANGE_NAME}/.openspec.yaml`]: 'affected_areas: [client-fe]\n' },
-      { branch: 'feat/SE-123-x' },
+      { branch: 'feat/TN-123-x' },
     )
     expect(flow.steps.every((step) => step.status === 'done')).toBe(true)
     expect(flow.changeName).toBe(CHANGE_NAME)
