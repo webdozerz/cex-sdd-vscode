@@ -6,28 +6,36 @@
 
 ## Установка
 
-Нужен VS Code 1.85+ и команда `code` в PATH (VS Code → `Shell Command: Install 'code' command in PATH`).
+Репозиторий приватный, поэтому релиз скачивается через `gh` (GitHub CLI) с вашим доступом к репозиторию.
+
+Нужны:
+- VS Code 1.85+ и команда `code` в PATH (VS Code → `Shell Command: Install 'code' command in PATH`);
+- `gh`, авторизованный в GitHub: `brew install gh` и `gh auth login`;
+- доступ на чтение к `webdozerz/cex-sdd-vscode` — попросите у владельца репозитория.
+
 `code --install-extension` не понимает ссылок, поэтому файл сначала скачивается, затем устанавливается.
 
 **macOS / Linux**
 
 ```bash
-curl -fL -o /tmp/cex-sdd-vscode.vsix https://github.com/webdozerz/cex-sdd-vscode/releases/latest/download/cex-sdd-vscode.vsix \
+gh release download --repo webdozerz/cex-sdd-vscode --pattern cex-sdd-vscode.vsix --dir /tmp --clobber \
   && code --install-extension /tmp/cex-sdd-vscode.vsix --force
 ```
 
 **Windows (PowerShell)**
 
 ```powershell
-Invoke-WebRequest https://github.com/webdozerz/cex-sdd-vscode/releases/latest/download/cex-sdd-vscode.vsix -OutFile $env:TEMP\cex-sdd-vscode.vsix
+gh release download --repo webdozerz/cex-sdd-vscode --pattern cex-sdd-vscode.vsix --dir $env:TEMP --clobber
 code --install-extension $env:TEMP\cex-sdd-vscode.vsix --force
 ```
 
 **Cursor** — то же самое, но вместо `code` команда `cursor` (Cursor → `Shell Command: Install 'cursor' command`).
 
-Те же команды обновляют расширение до последней версии. После установки перезагрузите окно (`Developer: Reload Window`).
+Те же команды обновляют расширение до последней версии: `gh release download` без тега берёт последний релиз. После установки перезагрузите окно (`Developer: Reload Window`).
 
-Без терминала: скачайте `cex-sdd-vscode.vsix` со страницы [Releases](https://github.com/webdozerz/cex-sdd-vscode/releases), затем в VS Code **Extensions** → меню `…` → **Install from VSIX…**.
+Без терминала: войдите в GitHub в браузере, скачайте `cex-sdd-vscode.vsix` со страницы [Releases](https://github.com/webdozerz/cex-sdd-vscode/releases), затем в VS Code **Extensions** → меню `…` → **Install from VSIX…**.
+
+**Если `gh release download` пишет `release not found` или `HTTP 404`** — у вашего аккаунта нет доступа к репозиторию или `gh` авторизован под другим аккаунтом: проверьте `gh auth status`.
 
 ## Что нужно для работы
 
@@ -177,4 +185,4 @@ cp cex-sdd-vscode-<версия>.vsix /tmp/cex-sdd-vscode.vsix
 gh release create v<версия> /tmp/cex-sdd-vscode.vsix --title v<версия> --notes-file <заметки>
 ```
 
-Имя файла в релизе всегда `cex-sdd-vscode.vsix` — на него ссылается команда установки (`releases/latest/download/…`).
+Имя файла в релизе всегда `cex-sdd-vscode.vsix` — на него ссылается команда установки (`gh release download --pattern cex-sdd-vscode.vsix`).
