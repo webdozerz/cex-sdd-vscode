@@ -8,7 +8,8 @@ import { buildBranchName, slugFromChange } from './core/branch'
 import { listChanges, type IChangeInfo } from './core/change'
 import type { IGitProbe } from './core/model'
 import { PLUGIN_ID, readPluginStatus } from './core/plugin'
-import { bumpSpecsCommand, initSpecsCommand, specSubmodulePath, verifyCommand } from './core/repoinfo'
+import { bumpSpecsCommand, initSpecsCommand, specRepoUrl, specSubmodulePath, verifyCommand } from './core/repoinfo'
+import { buildSpecPrPrompt } from './core/specpr'
 import type { TActionId, TFlowModel, TRepoId } from './core/types'
 import { git, inspectSpecs } from './gitprobe'
 
@@ -239,6 +240,9 @@ export async function continueChange(deps: IActionDeps): Promise<void> {
   await openClaude(deps.root, buildApplyPrompt(model.changeName, model.key, model.jira))
 }
 
+const VULNERABILITY_DETAIL =
+  'Если расхождение даёт обход 2FA или прав, создание или потерю денег, доступ к чужим данным или подделку подписи — не описывайте его ни здесь, ни в репозитории, PR и Jira. Передайте лично CTO и техлиду бэка.'
+
 /**
  * Расхождение со спекой. Описание уходит только в запрос к Claude Code и нигде не сохраняется:
  * по правилам процесса уязвимости нельзя записывать в репозиторий, PR и Jira.
@@ -254,8 +258,7 @@ export async function reportSpecGap(deps: IActionDeps): Promise<void> {
     'Это не уязвимость?',
     {
       modal: true,
-      detail:
-        'Если расхождение даёт обход 2FA или прав, создание или потерю денег, доступ к чужим данным или подделку подписи — не описывайте его ни здесь, ни в репозитории, PR и Jira. Передайте лично CTO и техлиду бэка.',
+      detail: VULNERABILITY_DETAIL,
     },
     'Не уязвимость, продолжить',
   )
@@ -266,6 +269,63 @@ export async function reportSpecGap(deps: IActionDeps): Promise<void> {
   })
   if (!description?.trim()) return
   await openClaude(deps.root, `/cex-sdd:spec-gap ${description.trim()}`)
+}
+
+/**
+ * PR в репозиторий спек с правкой change по записи spec-gaps.md. Расширение ничего не пушит само:
+ * запрос уходит в Claude Code, агент готовит правку в отдельном клоне и ждёт подтверждения на push и PR.
+ */
+export async function proposeSpecPr(deps: IActionDeps): Promise<void> {
+  const model = deps.getModel()
+  if (model.kind !== 'change' || !model.changeName || !model.plansDir) {
+    void vscode.window.showWarningMessage('Сначала выберите change.')
+    return
+  }
+  const candidates = model.specPrCandidates
+  if (candidates.length === 0) {
+    void vscode.window.showInformationMessage('Нет расхождений, по которым нужен PR с правкой спеки: у всех есть PR или правка не нужна.')
+    return
+  }
+  const gap =
+    candidates.length === 1
+      ? candidates[0]
+      : (
+          await vscode.window.showQuickPick(
+            candidates.map((item) => ({ label: `№${item.n}. ${item.title}`, item })),
+            { placeHolder: 'По какому расхождению подготовить PR в спеку' },
+          )
+        )?.item
+  if (!gap) return
+
+  const confirm = await vscode.window.showInformationMessage(
+    `Подготовить PR в репозиторий спек по расхождению №${gap.n}?`,
+    {
+      modal: true,
+      detail: `Claude Code подготовит правку change ${model.changeName} в отдельном клоне репозитория спек (сабмодуль не трогается), прогонит проверки спек и покажет diff. Push и PR — только после вашего подтверждения. PR — предложение: решают аналитик и тимлид.\n\n${VULNERABILITY_DETAIL}`,
+    },
+    'Подготовить',
+  )
+  if (!confirm) return
+  const variant = await vscode.window.showInputBox({
+    title: 'Какой вариант из записи взять за основу',
+    prompt: 'Номер или текст варианта. Пусто — рекомендованный в записи или решение тимлида.',
+  })
+  if (variant === undefined) return
+
+  await openClaude(
+    deps.root,
+    buildSpecPrPrompt({
+      change: model.changeName,
+      key: model.key,
+      gap,
+      gapsFile: `${model.plansDir}/spec-gaps.md`,
+      submodulePath: specSubmodulePath(deps.root),
+      specRepoUrl: specRepoUrl(deps.root),
+      plansLocation: model.plansLocation,
+      repoId: model.repoId,
+      variant,
+    }),
+  )
 }
 
 export async function runVerify(deps: IActionDeps, fast: boolean): Promise<void> {
@@ -306,6 +366,8 @@ export function handleAction(deps: IActionDeps, id: TActionId): Promise<void> {
       return continueChange(deps)
     case 'spec-gap':
       return reportSpecGap(deps)
+    case 'spec-pr':
+      return proposeSpecPr(deps)
     case 'verify':
       return runVerify(deps, false)
     case 'verify-fast':

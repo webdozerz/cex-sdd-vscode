@@ -5,10 +5,12 @@ import { parse } from 'yaml'
 import { changePrefix } from './branch'
 import { countTempTableRows, parsePlan, parseSpecGaps } from './plan'
 import { parseTasks } from './tasks'
-import { REPO_IDS, type IAcceptance, type IChangeState, type TRepoId } from './types'
+import { REPO_IDS, type IAcceptance, type IChangeState, type TPlansLocation, type TRepoId } from './types'
 
 const SPEC_CHANGES = join('openspec', 'changes')
 const DESIGN_CHANGES = join('docs', 'changes')
+/** Настройки процесса в корне кодового репо; общий файл с плагином cex-sdd. */
+export const PROJECT_CONFIG_FILE = '.cex-sdd.yaml'
 
 export interface IChangeInfo {
   name: string
@@ -163,7 +165,40 @@ export interface IReadStateInput {
   /** Ключ задачи разработчика (из ветки) или null — тогда берётся jira из meta.yaml. */
   key: string | null
   changeName: string | null
+  /** design.md в origin/develop (план в кодовом репо); для плана в спеке не нужен. */
   designMerged: boolean | null
+  /** Репозиторий этого проекта: по нему план в спеке лежит в plans/<repoId>/. */
+  repoId?: TRepoId | null
+  /** Настройка sddFlow.plansLocation: auto, code или spec. */
+  plansSetting?: string
+}
+
+/** Каталог change в спеке (активный или в архиве) относительно корня проекта. */
+export function changeSpecDir(root: string, changeName: string): string | null {
+  return dirOf(root, changeName)?.specDir ?? null
+}
+
+/** План в спеке: openspec/changes/<change>/plans/<repoId>. */
+export function specPlansDir(specDir: string, repoId: TRepoId): string {
+  return join(specDir, 'plans', repoId)
+}
+
+/**
+ * Где лежит план. Порядок: настройка sddFlow.plansLocation → `plans:` в .cex-sdd.yaml →
+ * есть ли у change каталог plans/<repoId>/ в спеке → кодовый репо.
+ * План в спеке без известного репозитория найти нельзя — тогда кодовый репо.
+ */
+export function resolvePlansLocation(
+  root: string,
+  specDir: string | null,
+  repoId: TRepoId | null | undefined,
+  setting = 'auto',
+): TPlansLocation {
+  if (!specDir || !repoId) return 'code'
+  if (setting === 'code' || setting === 'spec') return setting
+  const configured = readYaml(join(root, PROJECT_CONFIG_FILE))?.plans
+  if (configured === 'code' || configured === 'spec') return configured
+  return existsSync(join(root, specPlansDir(specDir, repoId))) ? 'spec' : 'code'
 }
 
 /** Читает с диска всё, что известно про change в этом проекте. */
@@ -173,10 +208,20 @@ export function readChangeState(root: string, input: IReadStateInput): IChangeSt
   const specDir = found?.specDir ?? null
   const changeName = found ? input.changeName : null
 
-  const designName = changeName ? (listDirs(join(root, DESIGN_CHANGES)).find((name) => name === changeName) ?? null) : null
-  const designDir = designName ? join(DESIGN_CHANGES, designName) : changeName ? join(DESIGN_CHANGES, changeName) : null
-  const designRoot = designName ? join(root, DESIGN_CHANGES, designName) : null
+  const plansLocation = resolvePlansLocation(root, specDir, input.repoId, input.plansSetting)
+  let designDir: string | null
+  let designRoot: string | null
+  if (plansLocation === 'spec' && specDir && input.repoId) {
+    designDir = specPlansDir(specDir, input.repoId)
+    designRoot = existsSync(join(root, designDir)) ? join(root, designDir) : null
+  } else {
+    const designName = changeName ? (listDirs(join(root, DESIGN_CHANGES)).find((name) => name === changeName) ?? null) : null
+    designDir = designName ? join(DESIGN_CHANGES, designName) : changeName ? join(DESIGN_CHANGES, changeName) : null
+    designRoot = designName ? join(root, DESIGN_CHANGES, designName) : null
+  }
   const hasDesign = designRoot !== null && existsSync(join(designRoot, 'design.md'))
+  // План в спеке виден в сабмодуле только после мержа в main спек-репо: раз он есть — дизайн смержен.
+  const designMerged = plansLocation === 'spec' ? (hasDesign ? true : null) : input.designMerged
 
   const meta = specDir ? readYaml(join(root, specDir, 'meta.yaml')) : null
   const jira = typeof meta?.jira === 'string' ? meta.jira : null
@@ -196,8 +241,9 @@ export function readChangeState(root: string, input: IReadStateInput): IChangeSt
     archived: found?.archived ?? false,
     specDir,
     designDir,
+    plansLocation,
     hasDesign,
-    designMerged: input.designMerged,
+    designMerged,
     affectedAreas: areas,
     tier,
     tasks: tasksText === null ? [] : parseTasks(tasksText),

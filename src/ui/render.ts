@@ -136,6 +136,7 @@ function renderChange(flow: IChangeFlow): string {
   const tags = [
     flow.tier !== null ? `tier ${flow.tier}` : null,
     flow.jira && flow.jira !== flow.key ? `родитель ${flow.jira}` : null,
+    flow.plansLocation === 'spec' ? 'план в спеке' : null,
     ...flow.areas,
   ]
     .filter((tag): tag is string => tag !== null)

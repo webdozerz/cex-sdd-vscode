@@ -1,4 +1,5 @@
 import { isFixBranch } from './branch'
+import { specPrCandidates } from './plan'
 import { MIN_PLUGIN_VERSION, PLUGIN_NAME, PLUGIN_OK, type IPluginStatus } from './plugin'
 import type {
   IAction,
@@ -30,6 +31,7 @@ const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 } as const
 const ACTION_VERIFY_FAST: IAction = { id: 'verify-fast', label: 'Быстрая проверка' }
 const ACTION_VERIFY: IAction = { id: 'verify', label: 'Полная проверка (verify)' }
 const ACTION_SPEC_GAP: IAction = { id: 'spec-gap', label: 'Расхождение со спекой' }
+const ACTION_SPEC_PR: IAction = { id: 'spec-pr', label: 'Предложить PR с правкой спеки' }
 
 interface IFlowContext {
   repoId: TRepoId | null
@@ -47,6 +49,10 @@ function needsDesignPr(state: IChangeState): boolean {
 
 function findGroup(state: IChangeState, repoId: TRepoId | null): ITasksGroup | null {
   return repoId ? (state.tasks.find((group) => group.repo === repoId) ?? null) : null
+}
+
+function isSpecPlans(state: IChangeState): boolean {
+  return state.plansLocation === 'spec'
 }
 
 function isDesignDone(state: IChangeState): boolean {
@@ -152,7 +158,7 @@ function computeStatuses(state: IChangeState, ctx: IFlowContext): Record<TStepId
 
 function stepNote(id: TStepId, status: TStepStatus, state: IChangeState): string | undefined {
   if (id === 'design' && status === 'current' && state.hasDesign && needsDesignPr(state)) {
-    return 'design PR ещё не смержен в develop'
+    return isSpecPlans(state) ? 'design PR ещё не смержен в спеку' : 'design PR ещё не смержен в develop'
   }
   if (id === 'pr' && status === 'current') return 'статус PR появится с интеграцией GitHub'
   if ((id === 'dev' || id === 'rc') && status === 'unknown') return 'определяется по GitHub'
@@ -218,7 +224,9 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
       id: 'no-design',
       severity: 'warning',
       title: 'Нет design.md и plan.md',
-      hint: `Их создаёт /cex-sdd:apply в docs/changes/${state.changeName}/ и ждёт вашего согласия`,
+      hint: isSpecPlans(state)
+        ? `Их создаёт /cex-sdd:apply в спеке, ${state.designDir}/, отдельным PR в репозиторий спек; после мержа — обновить спеки`
+        : `Их создаёт /cex-sdd:apply в docs/changes/${state.changeName}/ и ждёт вашего согласия`,
     })
   } else if (needsDesignPr(state) && state.designMerged === false) {
     blockers.push({
@@ -230,14 +238,32 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
     })
   }
 
-  for (const gap of state.gaps.filter((item) => !item.resolved)) {
-    blockers.push({
-      id: `spec-gap-${gap.n}`,
-      severity: 'warning',
-      title: `Расхождение со спекой №${gap.n}: ${gap.title}`,
-      hint: `${gap.blocks ? `Блокирует: ${gap.blocks}. ` : ''}Ждёт решения тимлида (поле «Решение» в spec-gaps.md)`,
-      file: `${state.designDir}/spec-gaps.md`,
-    })
+  const gapsFile = `${state.designDir}/spec-gaps.md`
+  const canPropose = new Set(specPrCandidates(state.gaps).map((gap) => gap.n))
+  for (const gap of state.gaps) {
+    const blocks = gap.blocks ? `Блокирует: ${gap.blocks}. ` : ''
+    if (!gap.resolved) {
+      const pr = gap.specPr
+        ? ` PR с правкой спеки: ${gap.specPr}.`
+        : canPropose.has(gap.n)
+          ? ' Можно предложить PR с правкой спеки — кнопка выше.'
+          : ''
+      blockers.push({
+        id: `spec-gap-${gap.n}`,
+        severity: 'warning',
+        title: `Расхождение со спекой №${gap.n}: ${gap.title}`,
+        hint: `${blocks}Ждёт решения тимлида (поле «Решение» в spec-gaps.md).${pr}`,
+        file: gapsFile,
+      })
+    } else if (gap.needsSpecUpdate && canPropose.has(gap.n)) {
+      blockers.push({
+        id: `spec-pr-missing-${gap.n}`,
+        severity: 'warning',
+        title: `Расхождение №${gap.n}: решено обновить change, PR со спекой нет`,
+        hint: `${blocks}Подготовьте PR в репозиторий спек — кнопка «Предложить PR с правкой спеки» — или передайте правку аналитику. После мержа — обновить спеки отдельным коммитом`,
+        file: gapsFile,
+      })
+    }
   }
 
   blockers.push(...tempExceptionBlockers(state))
@@ -304,7 +330,9 @@ function computeNext(state: IChangeState, blockers: IBlocker[], current: ILocate
   if (state.acceptance.accepted) return 'Приёмка пройдена, change ждёт архивации'
   if (!state.hasDesign) return 'Спроектировать: /cex-sdd:apply напишет design.md и plan.md и спросит согласия'
   if (needsDesignPr(state) && state.designMerged === false) {
-    return 'Открыть PR с дизайном (заголовок «TN-…: design …») и дождаться мержа'
+    return isSpecPlans(state)
+      ? 'Открыть PR с дизайном в репозиторий спек, дождаться мержа и обновить спеки'
+      : 'Открыть PR с дизайном (заголовок «TN-…: design …») и дождаться мержа'
   }
   if (state.tempMarkers.length > 0 && isIntegrationTime(state)) {
     return 'Снять временные исключения: метки sdd-temp в коде и строки таблицы в design.md'
@@ -336,7 +364,9 @@ function computeActions(state: IChangeState, blockers: IBlocker[]): IAction[] {
       ? 'Продолжить по плану'
       : 'Продолжить change'
   const actions: IAction[] = [{ id: 'continue', label, primary: !blockers.some((b) => b.severity === 'error') }]
-  actions.push(ACTION_SPEC_GAP, ACTION_VERIFY_FAST, ACTION_VERIFY)
+  actions.push(ACTION_SPEC_GAP)
+  if (specPrCandidates(state.gaps).length > 0) actions.push(ACTION_SPEC_PR)
+  actions.push(ACTION_VERIFY_FAST, ACTION_VERIFY)
   return actions
 }
 
@@ -443,6 +473,9 @@ export function buildFlow(state: IChangeState, context: IFlowContext): IChangeFl
     tier: state.tier,
     repoId: context.repoId,
     areas: state.affectedAreas,
+    plansLocation: state.plansLocation,
+    plansDir: state.designDir,
+    specPrCandidates: specPrCandidates(state.gaps).map((gap) => ({ n: gap.n, title: gap.title })),
     steps,
     blockers,
     plan: state.plan

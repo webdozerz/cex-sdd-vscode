@@ -2,7 +2,7 @@
   "name": "cex-sdd-vscode",
   "displayName": "SDD Flow",
   "description": "Панель AI-Native процесса (OpenSpec SDD) для разработчиков: шаг задачи, стопперы, прогресс плана по PR, кнопки для /cex-sdd:apply, проверок и спек",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "publisher": "local",
   "private": true,
   "license": "UNLICENSED",
@@ -74,6 +74,11 @@
         "category": "SDD Flow"
       },
       {
+        "command": "sddFlow.specPr",
+        "title": "Предложить PR с правкой спеки",
+        "category": "SDD Flow"
+      },
+      {
         "command": "sddFlow.installPlugin",
         "title": "Установить или обновить плагин cex-sdd",
         "category": "SDD Flow"
@@ -138,6 +143,21 @@
             "qa-tests"
           ],
           "description": "Какому репозиторию из affected_areas соответствует этот проект. auto — по адресу origin или имени папки."
+        },
+        "sddFlow.plansLocation": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "code",
+            "spec"
+          ],
+          "enumDescriptions": [
+            "plans: в .cex-sdd.yaml в корне репозитория, иначе — есть ли у change каталог plans/<репозиторий>/ в спеке, иначе кодовый репо",
+            "docs/changes/<change>/ в кодовом репо",
+            "openspec/changes/<change>/plans/<репозиторий>/ в репозитории спек"
+          ],
+          "description": "Где лежат design.md, plan.md и spec-gaps.md."
         }
       }
     }

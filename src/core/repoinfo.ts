@@ -14,6 +14,22 @@ export function specSubmodulePath(root: string): string {
   }
 }
 
+/** Адрес репозитория спек из .gitmodules (секция сабмодуля спек); null — не найден. */
+export function specRepoUrl(root: string): string | null {
+  try {
+    const text = readFileSync(join(root, '.gitmodules'), 'utf8')
+    const path = specSubmodulePath(root)
+    for (const section of text.split(/^\s*\[submodule\b/m)) {
+      const sectionPath = section.match(/^\s*path\s*=\s*(\S+)\s*$/m)?.[1]
+      const url = section.match(/^\s*url\s*=\s*(\S+)\s*$/m)?.[1]
+      if (sectionPath === path && url) return url
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 function packageScripts(root: string): Record<string, string> {
   try {
     const pkg: unknown = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))

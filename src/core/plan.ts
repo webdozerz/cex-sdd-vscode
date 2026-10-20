@@ -7,6 +7,10 @@ const TEMP_SECTION_RE = /^##\s+временные исключения\s*$/i
 const DONE_SUFFIX_RE = /\s*[—–-]\s*готово\s*$/i
 const GAP_HEAD_RE = /^##\s+(\d+)\.\s+(.*?)\s*$/
 const FIELD_RE = /^\s*[-*]\s+\*\*([^:*]+):\*\*\s*(.*?)\s*$/
+const SPEC_UPDATE_RE = /обновить\s+change/i
+const NO_EDIT_RE = /^не\s+нужна/i
+/** «—», «-», «нет» или пусто — PR нет. */
+const NO_PR_RE = /^(?:[—–-]|нет)?$/i
 
 /**
  * docs/changes/<change>/plan.md (создаёт и ведёт /cex-sdd:apply):
@@ -51,35 +55,51 @@ export function parsePlan(markdown: string): IPlan {
 }
 
 /**
- * docs/changes/<change>/spec-gaps.md (создаёт /cex-sdd:spec-gap): записи `## N. <кратко>`
- * с полями «Блокирует» и «Решение». Поле «Решение» заполняет тимлид; пока там шаблон в <…> — расхождение открыто.
+ * spec-gaps.md (создаёт /cex-sdd:spec-gap): записи `## N. <кратко>` с полями «Блокирует», «Решение»,
+ * «Правка спеки» и «PR спеки». Поле «Решение» заполняет тимлид; пока там шаблон в <…> — расхождение открыто.
  */
 export function parseSpecGaps(markdown: string): ISpecGap[] {
   const gaps: ISpecGap[] = []
-  let current: { n: string; title: string; blocks: string; decision: string } | null = null
+  let current: { n: string; title: string; blocks: string; decision: string; specEdit: string | null; specPr: string } | null = null
 
   const flush = (): void => {
-    if (current) {
-      gaps.push({ n: current.n, title: current.title, blocks: current.blocks, resolved: current.decision.length > 0 })
-    }
+    if (!current) return
+    const edit = current.specEdit
+    gaps.push({
+      n: current.n,
+      title: current.title,
+      blocks: current.blocks,
+      resolved: current.decision.length > 0,
+      needsSpecUpdate: SPEC_UPDATE_RE.test(current.decision),
+      specEdit: edit === null || edit === '' ? 'unknown' : NO_EDIT_RE.test(edit) ? 'not-needed' : 'needed',
+      specPr: NO_PR_RE.test(current.specPr) ? null : current.specPr,
+    })
   }
 
   for (const line of markdown.split(/\r?\n/)) {
     const head = line.match(GAP_HEAD_RE)
     if (head) {
       flush()
-      current = { n: head[1], title: head[2], blocks: '', decision: '' }
+      current = { n: head[1], title: head[2], blocks: '', decision: '', specEdit: null, specPr: '' }
       continue
     }
     if (!current) continue
     const field = line.match(FIELD_RE)
     if (!field) continue
     const name = field[1].trim().toLowerCase()
-    if (name === 'блокирует') current.blocks = field[2].replace(/<[^>]*>/g, '').trim() || field[2]
-    if (name === 'решение') current.decision = field[2].replace(/<[^>]*>/g, '').trim()
+    const value = field[2].replace(/<[^>]*>/g, '').trim()
+    if (name === 'блокирует') current.blocks = value || field[2]
+    if (name === 'решение') current.decision = value
+    if (name === 'правка спеки') current.specEdit = value
+    if (name === 'pr спеки') current.specPr = value
   }
   flush()
   return gaps
+}
+
+/** Расхождения, по которым стоит предложить PR с правкой спеки: правка не исключена и PR ещё нет. */
+export function specPrCandidates(gaps: ISpecGap[]): ISpecGap[] {
+  return gaps.filter((gap) => gap.specPr === null && gap.specEdit !== 'not-needed' && (!gap.resolved || gap.needsSpecUpdate))
 }
 
 /**

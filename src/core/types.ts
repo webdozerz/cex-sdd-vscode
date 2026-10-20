@@ -15,6 +15,7 @@ export type TActionId =
   | 'start'
   | 'continue'
   | 'spec-gap'
+  | 'spec-pr'
   | 'verify'
   | 'verify-fast'
   | 'pick-change'
@@ -86,14 +87,26 @@ export interface IPlan {
   done: number
 }
 
-/** Запись из docs/changes/<change>/spec-gaps.md. */
+/** Запись из spec-gaps.md (рядом с plan.md: в docs/changes/<change>/ или в спеке, см. TPlansLocation). */
 export interface ISpecGap {
   n: string
   title: string
   blocks: string
   /** Тимлид заполнил поле «Решение». */
   resolved: boolean
+  /** Решение тимлида — обновить change: нужна правка спеки. */
+  needsSpecUpdate: boolean
+  /** Поле «Правка спеки»: not-needed — «не нужна»; unknown — поля нет (записи до 0.6.0) или оно не заполнено. */
+  specEdit: 'needed' | 'not-needed' | 'unknown'
+  /** Поле «PR спеки»: ссылка или номер PR в репозитории спек; null — PR нет. */
+  specPr: string | null
 }
+
+/**
+ * Где лежат design.md, plan.md и spec-gaps.md: code — в кодовом репо, docs/changes/<change>/;
+ * spec — в репозитории спек, openspec/changes/<change>/plans/<репозиторий>/ (меняются только PR в спек-репо).
+ */
+export type TPlansLocation = 'code' | 'spec'
 
 export interface IAcceptance {
   exists: boolean
@@ -113,7 +126,9 @@ export interface IChangeState {
   archived: boolean
   /** Путь к папке change относительно корня проекта. */
   specDir: string | null
+  /** Каталог design.md, plan.md и spec-gaps.md относительно корня проекта. */
   designDir: string | null
+  plansLocation: TPlansLocation
   hasDesign: boolean
   /** design.md уже в origin/develop. null — неизвестно. */
   designMerged: boolean | null
@@ -174,6 +189,11 @@ export interface IChangeFlow {
   tier: number | null
   repoId: TRepoId | null
   areas: TRepoId[]
+  plansLocation: TPlansLocation
+  /** Каталог плана и журнала расхождений относительно корня проекта. */
+  plansDir: string | null
+  /** Расхождения, по которым можно предложить PR с правкой спеки. */
+  specPrCandidates: Array<{ n: string; title: string }>
   steps: IFlowStep[]
   blockers: IBlocker[]
   /** null — plan.md ещё нет. */

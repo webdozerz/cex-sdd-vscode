@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { proposalTitle } from '../src/core/change'
-import { parsePlan, parseSpecGaps } from '../src/core/plan'
+import { parsePlan, parseSpecGaps, specPrCandidates } from '../src/core/plan'
 import { parseTasks } from '../src/core/tasks'
 
 const SAMPLE = `# Tasks
@@ -121,10 +121,55 @@ describe('parseSpecGaps', () => {
 `)
 
   it('шаблон в угловых скобках — расхождение открыто', () => {
-    expect(gaps[0]).toEqual({ n: '1', title: 'Граница периода', blocks: 'шаги 2.1, 2.2', resolved: false })
+    expect(gaps[0]).toEqual({
+      n: '1',
+      title: 'Граница периода',
+      blocks: 'шаги 2.1, 2.2',
+      resolved: false,
+      needsSpecUpdate: false,
+      specEdit: 'unknown',
+      specPr: null,
+    })
   })
 
   it('заполненное решение закрывает расхождение', () => {
     expect(gaps[1].resolved).toBe(true)
+    expect(gaps[1].needsSpecUpdate).toBe(true)
+  })
+})
+
+describe('поля «Правка спеки» и «PR спеки»', () => {
+  const gaps = parseSpecGaps(`## 1. Окно подтверждения
+- **Правка спеки:** ui.md — окно в два шага
+- **Решение:** <заполняет тимлид>
+- **PR спеки:** —
+
+## 2. Частичное сохранение
+- **Правка спеки:** не нужна
+- **Решение:** <заполняет тимлид>
+
+## 3. Нет прав
+- **Решение:** обновить change, вариант 1
+- **PR спеки:** https://github.com/org/specs/pull/42
+
+## 4. Старый формат
+- **Решение:** обновить change
+
+## 5. Баг
+- **Решение:** баг кода
+`)
+
+  it('читает правку и PR', () => {
+    expect(gaps.map((gap) => [gap.n, gap.specEdit, gap.specPr])).toEqual([
+      ['1', 'needed', null],
+      ['2', 'not-needed', null],
+      ['3', 'unknown', 'https://github.com/org/specs/pull/42'],
+      ['4', 'unknown', null],
+      ['5', 'unknown', null],
+    ])
+  })
+
+  it('PR предлагается: открыто с правкой, решено «обновить change» без PR; не предлагается: правка не нужна, PR есть, баг кода', () => {
+    expect(specPrCandidates(gaps).map((gap) => gap.n)).toEqual(['1', '4'])
   })
 })

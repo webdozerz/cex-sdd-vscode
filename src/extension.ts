@@ -80,6 +80,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       branch: info.branch,
       remoteUrl: info.remoteUrl,
       repoSetting: vscode.workspace.getConfiguration('sddFlow').get<string>('repoId', 'auto'),
+      plansSetting: vscode.workspace.getConfiguration('sddFlow').get<string>('plansLocation', 'auto'),
       overrideChange,
       git: createGitProbe(root),
       plugin: readPluginStatus(homedir(), root),
@@ -117,7 +118,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     git = await watchGit(folder.uri, scheduleRefresh)
     context.subscriptions.push(git)
 
-    for (const pattern of ['docs/changes/**', 'openspec/changes/**']) {
+    for (const pattern of ['docs/changes/**', 'openspec/changes/**', '.cex-sdd.yaml']) {
       const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, pattern))
       watcher.onDidCreate(scheduleRefresh)
       watcher.onDidChange(scheduleRefresh)
@@ -153,6 +154,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('sddFlow.installPlugin', () => deps && installPlugin(deps)),
     vscode.commands.registerCommand('sddFlow.continue', () => deps && handleAction(deps, 'continue')),
     vscode.commands.registerCommand('sddFlow.specGap', () => deps && handleAction(deps, 'spec-gap')),
+    vscode.commands.registerCommand('sddFlow.specPr', () => deps && handleAction(deps, 'spec-pr')),
     vscode.commands.registerCommand('sddFlow.verify', () => deps && handleAction(deps, 'verify')),
     vscode.commands.registerCommand('sddFlow.verifyFast', () => deps && handleAction(deps, 'verify-fast')),
     vscode.commands.registerCommand('sddFlow.resetChange', async () => {

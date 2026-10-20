@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 
 import { detectRepoId, isRepoId, parseIssueKey } from './branch'
-import { readChangeState, resolveChangeName } from './change'
+import { changeSpecDir, readChangeState, resolveChangeName, resolvePlansLocation } from './change'
 import { buildFlow, noKeyActions, pluginBlockers } from './flow'
 import type { IPluginStatus } from './plugin'
 import { mergePlan, type IPlanSources } from './planmerge'
@@ -14,8 +14,11 @@ export interface IGitProbe {
   branchChanges(): Promise<string[]>
   /** design.md этого change уже в origin/develop; null — не удалось определить. */
   isDesignMerged(change: string): Promise<boolean | null>
-  /** plan.md change в origin/develop и в удалённых ветках с ключом задачи (кроме текущей). */
-  planSources?(change: string, key: string | null, currentBranch: string | null): Promise<IPlanSources>
+  /**
+   * plan.md change в origin/develop и в удалённых ветках с ключом задачи (кроме текущей).
+   * specPlanPath — план лежит в спеке: тогда база — этот файл в main репозитория спек, ветки кодового репо не смотрятся.
+   */
+  planSources?(change: string, key: string | null, currentBranch: string | null, specPlanPath?: string): Promise<IPlanSources>
   /** Метки `sdd-temp(<KEY>)` в коде репозитория. */
   tempMarkers?(): Promise<ITempMarker[]>
   /** В ветке идёт работа: есть коммиты относительно origin/develop или изменённые отслеживаемые файлы. */
@@ -38,6 +41,8 @@ export interface ILoadModelInput {
   git?: IGitProbe
   /** Состояние плагина cex-sdd (см. readPluginStatus); не задано — считается исправным. */
   plugin?: IPluginStatus
+  /** Настройка sddFlow.plansLocation: auto, code или spec. */
+  plansSetting?: string
 }
 
 export async function loadFlowModel(input: ILoadModelInput): Promise<TFlowModel> {
@@ -62,13 +67,19 @@ export async function loadFlowModel(input: ILoadModelInput): Promise<TFlowModel>
   const repoId = isRepoId(input.repoSetting)
     ? input.repoSetting
     : detectRepoId([input.remoteUrl, basename(input.root)])
+  const specDir = resolved ? changeSpecDir(input.root, resolved.name) : null
+  const location = resolvePlansLocation(input.root, specDir, repoId, input.plansSetting)
   const state = readChangeState(input.root, {
     key: branchKey,
     changeName: resolved?.name ?? null,
-    designMerged: resolved ? await git.isDesignMerged(resolved.name) : null,
+    // План в спеке смержен, раз виден в сабмодуле: develop кодового репо спрашивать не нужно.
+    designMerged: resolved && location === 'code' ? await git.isDesignMerged(resolved.name) : null,
+    repoId,
+    ...(input.plansSetting ? { plansSetting: input.plansSetting } : {}),
   })
   if (state.plan && state.changeName && git.planSources) {
-    const sources = await git.planSources(state.changeName, branchKey, input.branch)
+    const specPlanPath = state.plansLocation === 'spec' && state.designDir ? `${state.designDir}/plan.md` : undefined
+    const sources = await git.planSources(state.changeName, branchKey, input.branch, specPlanPath)
     state.plan = mergePlan(state.plan, sources, state.designMerged, input.branch)
   }
   if (state.changeName && git.tempMarkers) {

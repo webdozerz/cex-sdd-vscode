@@ -12,6 +12,9 @@ const FLOW: IChangeFlow = {
   tier: 1,
   repoId: 'client-fe',
   areas: ['client-fe'],
+  plansLocation: 'code',
+  plansDir: 'docs/changes/tn-123-x',
+  specPrCandidates: [],
   steps: [{ id: 'spec', title: 'Спека', status: 'done' }],
   blockers: [{ id: 'b', severity: 'error', title: '<script>alert(1)</script>', file: 'a"b.md' }],
   plan: {
@@ -112,5 +115,12 @@ describe('render', () => {
     expect(html).toContain('Форма лимитов')
     expect(html).toContain('предположительно')
     expect(html).toContain('<span class="badge">в работе</span>')
+  })
+})
+
+describe('место плана', () => {
+  it('план в спеке — тег в шапке', () => {
+    expect(renderBody({ ...FLOW, plansLocation: 'spec' })).toContain('<span class="tag">план в спеке</span>')
+    expect(renderBody(FLOW)).not.toContain('план в спеке')
   })
 })

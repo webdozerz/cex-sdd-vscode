@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 
 import type { IGitProbe } from './core/model'
 import { parseTempMarkers } from './core/plan'
+import { specSubmodulePath } from './core/repoinfo'
 import type { IPrSteps } from './core/types'
 
 const GIT_TIMEOUT_MS = 10_000
@@ -123,7 +124,18 @@ export function createGitProbe(root: string): IGitProbe {
       return [...new Set(names)]
     },
 
-    async planSources(change, key, currentBranch) {
+    async planSources(change, key, currentBranch, specPlanPath) {
+      if (specPlanPath) {
+        // План в спеке: база — main репозитория спек (после fetch сабмодуля), иначе закреплённый commit.
+        // PR кодового репо по-прежнему отмечают шаги строкой «Шаги plan.md: …».
+        const submodule = specSubmodulePath(root)
+        // Путь внутри сабмодуля тот же, что через симлинк openspec/ в корне; в git — только прямые слэши.
+        const inSpec = specPlanPath.replace(/\\/g, '/')
+        const show = (ref: string): Promise<string | null> =>
+          gitRead(root, ['-C', submodule, 'show', `${ref}:${inSpec}`]).catch(() => null)
+        const base = (await show('origin/main')) ?? (await show('HEAD'))
+        return { develop: base, branches: [], prs: key ? await listPrSteps(root, key) : null }
+      }
       const path = `docs/changes/${change}/plan.md`
       const show = (ref: string): Promise<string | null> => gitRead(root, ['show', `${ref}:${path}`]).catch(() => null)
       const branches: Array<{ name: string; text: string }> = []
