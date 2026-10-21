@@ -23,6 +23,8 @@ export interface IPluginStatus {
   version: string | null
   /** Команды, которые приводят плагин в порядок; пусто для ok и unknown. */
   commands: string[]
+  /** Установка не пользовательская (project, local): в этом проекте действует она, а не установка для пользователя. */
+  scope?: string
 }
 
 export const PLUGIN_OK: IPluginStatus = { state: 'ok', version: null, commands: [] }
@@ -120,10 +122,16 @@ export function readPluginStatus(home: string, projectRoot: string): IPluginStat
   if (enabled === false) return { state: 'disabled', version, commands: [`claude plugin enable ${PLUGIN_ID}`] }
 
   if (version && compareVersions(version, MIN_PLUGIN_VERSION) < 0) {
+    // Обновление без --scope трогает только установку для пользователя, а установка проекта остаётся старой.
+    const scope = entry.scope && entry.scope !== 'user' ? entry.scope : undefined
     return {
       state: 'outdated',
       version,
-      commands: [`claude plugin marketplace update ${MARKETPLACE_NAME}`, `claude plugin update ${PLUGIN_ID}`],
+      commands: [
+        `claude plugin marketplace update ${MARKETPLACE_NAME}`,
+        `claude plugin update ${PLUGIN_ID}${scope ? ` --scope ${scope}` : ''}`,
+      ],
+      ...(scope ? { scope } : {}),
     }
   }
   return { state: 'ok', version, commands: [] }

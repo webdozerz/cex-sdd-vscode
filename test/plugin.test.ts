@@ -114,6 +114,21 @@ describe('выбор установки как в Claude Code', () => {
     expect(readPluginStatus(home, project)).toMatchObject({ state: 'ok', version: '0.7.0' })
   })
 
+  it('устаревшая установка проекта при свежей пользовательской: обновлять с --scope project', () => {
+    const home = makeProject({
+      [`${PLUGINS}/installed_plugins.json`]: entries([
+        { scope: 'user', version: '0.8.1' },
+        { scope: 'project', projectPath: project, version: '0.6.0' },
+      ]),
+    })
+    expect(readPluginStatus(home, project)).toEqual({
+      state: 'outdated',
+      version: '0.6.0',
+      commands: ['claude plugin marketplace update crypton', 'claude plugin update cex-sdd@crypton --scope project'],
+      scope: 'project',
+    })
+  })
+
   it('чужой проект не учитывается: берётся пользовательская', () => {
     const home = makeProject({
       [`${PLUGINS}/installed_plugins.json`]: entries([

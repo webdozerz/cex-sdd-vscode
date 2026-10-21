@@ -432,7 +432,9 @@ export function pluginBlockers(plugin: IPluginStatus = PLUGIN_OK): IBlocker[] {
           id: 'plugin-outdated',
           severity: 'warning',
           title: `Плагин ${PLUGIN_NAME} ${plugin.version ?? ''} устарел (нужна ${MIN_PLUGIN_VERSION} или новее)`,
-          hint: 'В старых версиях нет /cex-sdd:spec-update (правка change и отметка задач в OpenSpec), а до 0.6.0 в ветку и PR шёл ключ родителя вместо подзадачи',
+          hint: plugin.scope
+            ? `В этом проекте действует установка плагина для проекта (scope ${plugin.scope}), а не для пользователя: обновите её — claude plugin update ${PLUGIN_NAME}@… --scope ${plugin.scope} в корне проекта, кнопка ниже делает это`
+            : 'В старых версиях нет /cex-sdd:spec-update (правка change и отметка задач в OpenSpec), а до 0.6.0 в ветку и PR шёл ключ родителя вместо подзадачи',
         },
       ]
     default:
