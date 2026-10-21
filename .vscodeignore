@@ -9,3 +9,6 @@ esbuild.mjs
 package-lock.json
 **/*.map
 **/*.ts
+graft/**
+.gitignore
+.ignore
