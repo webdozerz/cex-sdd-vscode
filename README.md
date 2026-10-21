@@ -227,6 +227,7 @@ npm run watch        # пересборка при изменениях; F5 за
 npm test             # тесты ядра: разбор спек и плана, поиск change, лента, стопперы, прогресс, плагин
 npm run type-check
 npm run package      # проверка типов + тесты + сборка cex-sdd-vscode-<версия>.vsix
+npm run icon         # media/icon.svg → media/icon.png (иконка в списке расширений)
 ```
 
 Ядро (`src/core`, `src/ui/render.ts`) не зависит от `vscode` и покрыто тестами; `src/extension.ts`, `src/actions.ts`, `src/git.ts`, `src/gitprobe.ts`, `src/ui/FlowViewProvider.ts` — тонкий слой над API VS Code, git и gh.

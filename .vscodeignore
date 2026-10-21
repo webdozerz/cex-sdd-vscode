@@ -12,3 +12,5 @@ package-lock.json
 graft/**
 .gitignore
 .ignore
+scripts/**
+media/icon.svg
