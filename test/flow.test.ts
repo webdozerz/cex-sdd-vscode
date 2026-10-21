@@ -74,7 +74,7 @@ describe('определение change по ветке', () => {
       overrideChange: null,
     })
     expect(model.kind).toBe('no-key')
-    expect(model.kind === 'no-key' && model.actions.map((a) => a.id)).toEqual(['start', 'pick-change'])
+    expect(model.kind === 'no-key' && model.actions.map((a) => a.id)).toEqual(['start', 'pick-change', 'update-specs'])
   })
 
   it('ветка без ключа, но change выбран вручную — берём ключ из meta.yaml', async () => {

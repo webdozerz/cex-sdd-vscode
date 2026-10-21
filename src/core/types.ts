@@ -14,6 +14,8 @@ export type TBlockerSeverity = 'error' | 'warning' | 'info'
 export type TActionId =
   | 'init-specs'
   | 'bump-specs'
+  | 'sync-specs'
+  | 'update-specs'
   | 'start'
   | 'continue'
   | 'spec-gap'

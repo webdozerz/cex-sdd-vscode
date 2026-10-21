@@ -2,7 +2,7 @@
   "name": "cex-sdd-vscode",
   "displayName": "SDD Flow",
   "description": "Панель AI-Native процесса (OpenSpec SDD) для разработчиков: шаг задачи, стопперы, прогресс плана по PR, кнопки для /cex-sdd:apply, /cex-sdd:spec-update, проверок и спек",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "publisher": "local",
   "private": true,
   "license": "UNLICENSED",
@@ -84,6 +84,12 @@
         "category": "SDD Flow"
       },
       {
+        "command": "sddFlow.updateSpecs",
+        "title": "Обновить спеки",
+        "category": "SDD Flow",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "sddFlow.verify",
         "title": "Полная проверка (verify)",
         "category": "SDD Flow"
@@ -123,9 +129,14 @@
           "group": "navigation@2"
         },
         {
-          "command": "sddFlow.refresh",
+          "command": "sddFlow.updateSpecs",
           "when": "view == sddFlow.view",
           "group": "navigation@3"
+        },
+        {
+          "command": "sddFlow.refresh",
+          "when": "view == sddFlow.view",
+          "group": "navigation@4"
         }
       ]
     },

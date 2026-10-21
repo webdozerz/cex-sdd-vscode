@@ -10,7 +10,7 @@ import { readPluginStatus } from './core/plugin'
 import { createSerialRunner } from './core/serial'
 import type { TFlowModel } from './core/types'
 import { watchGit } from './git'
-import { clearPrCache, createGitProbe } from './gitprobe'
+import { clearPrCache, clearSpecsFetchCache, createGitProbe } from './gitprobe'
 import { FlowViewProvider } from './ui/FlowViewProvider'
 
 const REFRESH_DEBOUNCE_MS = 300
@@ -149,6 +149,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('sddFlow.refresh', () => {
       clearPrCache()
+      clearSpecsFetchCache()
       return refresh()
     }),
     vscode.commands.registerCommand('sddFlow.focus', () =>
@@ -160,6 +161,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('sddFlow.continue', () => deps && handleAction(deps, 'continue')),
     vscode.commands.registerCommand('sddFlow.specGap', () => deps && handleAction(deps, 'spec-gap')),
     vscode.commands.registerCommand('sddFlow.specUpdate', () => deps && handleAction(deps, 'spec-update')),
+    vscode.commands.registerCommand('sddFlow.updateSpecs', () => deps && handleAction(deps, 'update-specs')),
     vscode.commands.registerCommand('sddFlow.verify', () => deps && handleAction(deps, 'verify')),
     vscode.commands.registerCommand('sddFlow.verifyFast', () => deps && handleAction(deps, 'verify-fast')),
     vscode.commands.registerCommand('sddFlow.resetChange', async () => {

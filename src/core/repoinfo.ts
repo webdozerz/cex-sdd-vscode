@@ -43,6 +43,12 @@ export function initSpecsCommand(root: string): string {
   return `git submodule update --init ${specSubmodulePath(root)}`
 }
 
+/** Вернуть сабмодуль спек к commit, закреплённому в ветке (после git pull или смены ветки). */
+export function syncSpecsCommand(root: string): string {
+  return `git submodule update --init ${specSubmodulePath(root)}`
+}
+
+/** Сабмодуль спек до свежего main OpenSpec; --init — и если сабмодуль ещё не скачан. */
 export function bumpSpecsCommand(root: string): string {
-  return `git submodule update --remote ${specSubmodulePath(root)}`
+  return `git submodule update --init --remote ${specSubmodulePath(root)}`
 }

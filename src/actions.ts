@@ -8,11 +8,11 @@ import { buildBranchName, slugFromChange } from './core/branch'
 import { listChanges, type IChangeInfo } from './core/change'
 import type { IGitProbe } from './core/model'
 import { MIN_PLUGIN_VERSION, PLUGIN_ID, readPluginStatus } from './core/plugin'
-import { bumpSpecsCommand, initSpecsCommand, specSubmodulePath, verifyCommand } from './core/repoinfo'
+import { bumpSpecsCommand, initSpecsCommand, specSubmodulePath, syncSpecsCommand, verifyCommand } from './core/repoinfo'
 import { chainCommands, detectShellKind, shellQuote, type TShellKind } from './core/shell'
 import { buildSpecUpdatePrompt } from './core/specupdate'
 import type { TActionId, TFlowModel, TRepoId } from './core/types'
-import { git, inspectSpecs, restartAiReview } from './gitprobe'
+import { clearSpecsFetchCache, git, inspectSpecs, restartAiReview } from './gitprobe'
 
 const CLAUDE_OPEN_COMMAND = 'claude-vscode.primaryEditor.open'
 const TERMINAL_NAME = 'SDD Flow'
@@ -370,17 +370,28 @@ export async function initSpecs(deps: IActionDeps): Promise<void> {
   runInTerminal(deps.root, initSpecsCommand(deps.root))
 }
 
+/**
+ * Сабмодуль спек до свежего main OpenSpec: `git submodule update --init --remote <путь>`.
+ * Меняется указатель сабмодуля в кодовом репо — его коммитят отдельным PR, не смешивая с кодом.
+ */
 export async function bumpSpecs(deps: IActionDeps): Promise<void> {
+  const command = bumpSpecsCommand(deps.root)
   const confirm = await vscode.window.showInformationMessage(
-    'Обновить указатель сабмодуля спек до свежего main OpenSpec?',
+    'Обновить спеки до свежего main OpenSpec?',
     {
       modal: true,
-      detail:
-        'По правилам процесса указатель обновляется отдельным коммитом chore(TN-…): bump openspec, который мержится в develop до начала работы. Не смешивайте его с кодом.',
+      detail: `${command}\n\nПосле этого в изменениях появится новый commit сабмодуля спек. Если его нужно оставить в ветке, он идёт отдельным PR в develop: chore(<ключ>): bump openspec — не смешивайте его с кодом.`,
     },
     'Обновить',
   )
-  if (confirm) runInTerminal(deps.root, bumpSpecsCommand(deps.root))
+  if (!confirm) return
+  runInTerminal(deps.root, command)
+  clearSpecsFetchCache()
+}
+
+/** Сабмодуль спек к закреплённому в ветке commit: безопасно, коммит не нужен. */
+export async function syncSpecs(deps: IActionDeps): Promise<void> {
+  runInTerminal(deps.root, syncSpecsCommand(deps.root))
 }
 
 export function handleAction(deps: IActionDeps, id: TActionId): Promise<void> {
@@ -388,6 +399,10 @@ export function handleAction(deps: IActionDeps, id: TActionId): Promise<void> {
     case 'init-specs':
       return initSpecs(deps)
     case 'bump-specs':
+      return bumpSpecs(deps)
+    case 'sync-specs':
+      return syncSpecs(deps)
+    case 'update-specs':
       return bumpSpecs(deps)
     case 'start':
       return startTask(deps)

@@ -6,6 +6,7 @@ import { detectRepoId, isRepoId, parseIssueKey } from './branch'
 import { changeSpecDir, readChangeState, resolveChangeName, resolvePlansLocation } from './change'
 import { buildFlow, noKeyActions, pluginBlockers } from './flow'
 import type { IPluginStatus } from './plugin'
+import type { ISpecsSync } from './specsync'
 import { mergePlan, type IPlanSources } from './planmerge'
 import type { ITempMarker, TFlowModel } from './types'
 
@@ -24,6 +25,8 @@ export interface IGitProbe {
   tempMarkers?(): Promise<ITempMarker[]>
   /** В ветке идёт работа: есть коммиты относительно origin/develop или изменённые отслеживаемые файлы. */
   isBranchActive?(): Promise<boolean>
+  /** Сабмодуль спек против ветки и main OpenSpec; change — чьи файлы сравнивать. null — не удалось определить. */
+  specsSync?(change: string | null): Promise<ISpecsSync | null>
   /** PR ветки с проверками и комментариями; null — PR нет или gh недоступен. */
   currentPr?(branch: string): Promise<IPrInfo | null>
 }
@@ -93,5 +96,6 @@ export async function loadFlowModel(input: ILoadModelInput): Promise<TFlowModel>
   const branchActive = branchKey && git.isBranchActive ? await git.isBranchActive() : false
   const hasAiReview = existsSync(join(input.root, AI_REVIEW_WORKFLOW_FILE))
   const aiReview = hasAiReview && input.branch && git.currentPr ? aiReviewStatus(await git.currentPr(input.branch)) : null
-  return buildFlow(state, { repoId, branch: input.branch, plugin: input.plugin, branchActive, aiReview })
+  const specsSync = specsAvailable && git.specsSync ? await git.specsSync(state.archived ? null : state.changeName) : null
+  return buildFlow(state, { repoId, branch: input.branch, plugin: input.plugin, branchActive, aiReview, specsSync })
 }

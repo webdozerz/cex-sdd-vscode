@@ -5,6 +5,7 @@ import { createTtlCache } from './core/cache'
 import type { IGitProbe } from './core/model'
 import { parseTempMarkers } from './core/plan'
 import { specSubmodulePath } from './core/repoinfo'
+import type { ISpecsSync } from './core/specsync'
 import type { IPrSteps } from './core/types'
 
 const GIT_TIMEOUT_MS = 10_000
@@ -77,6 +78,51 @@ export function parsePrSteps(body: string): string[] {
 /** Ответы gh живут 2 минуты: панель обновляется каждые 30 секунд и при фокусе окна, а PR меняются реже. */
 const PR_CACHE_TTL_MS = 120_000
 const prCache = createTtlCache<IPrSteps[] | null>(PR_CACHE_TTL_MS)
+
+/** git fetch сабмодуля спек — сетевой вызов: не чаще раза в 10 минут, «Обновить» и кнопки спек сбрасывают. */
+const SPECS_FETCH_TTL_MS = 600_000
+const specsFetchCache = createTtlCache<boolean>(SPECS_FETCH_TTL_MS)
+
+export function clearSpecsFetchCache(): void {
+  specsFetchCache.clear()
+}
+
+async function isAncestor(root: string, submodule: string, older: string, newer: string): Promise<boolean> {
+  return gitRead(root, ['-C', submodule, 'merge-base', '--is-ancestor', older, newer]).then(
+    () => true,
+    () => false,
+  )
+}
+
+/** Состояние сабмодуля спек: рабочая копия против закреплённого commit и закреплённый против main OpenSpec. */
+export async function inspectSpecsSync(root: string, change: string | null): Promise<ISpecsSync | null> {
+  const submodule = specSubmodulePath(root)
+  try {
+    // «160000 commit <sha>\t<путь>»: commit сабмодуля, закреплённый в HEAD кодового репо.
+    const pinned = (await gitRead(root, ['ls-tree', 'HEAD', submodule])).trim().split(/\s+/)[2]
+    const working = (await gitRead(root, ['-C', submodule, 'rev-parse', 'HEAD'])).trim()
+    if (!pinned) return null
+    let state: ISpecsSync['working'] = 'same'
+    if (working !== pinned) {
+      // Закреплённого commit нет в сабмодуле — его ещё не скачали: рабочая копия отстаёт.
+      const known = await gitRead(root, ['-C', submodule, 'cat-file', '-e', `${pinned}^{commit}`]).then(() => true, () => false)
+      if (!known || (await isAncestor(root, submodule, working, pinned))) state = 'behind'
+      else state = (await isAncestor(root, submodule, pinned, working)) ? 'ahead' : 'diverged'
+    }
+    await specsFetchCache.get(root, () =>
+      git(root, ['-C', submodule, 'fetch', '--quiet', 'origin', 'main']).then(() => true, () => false),
+    )
+    const latest = (await gitRead(root, ['-C', submodule, 'rev-parse', '--verify', '--quiet', 'origin/main']).catch(() => '')).trim()
+    if (!latest) return { working: state, changeUpdated: null, pinnedBehind: null }
+    const pinnedBehind = latest !== pinned && (await isAncestor(root, submodule, pinned, latest))
+    const changed = change
+      ? (await gitRead(root, ['-C', submodule, 'diff', '--name-only', pinned, latest, '--', `openspec/changes/${change}`])).trim()
+      : ''
+    return { working: state, changeUpdated: pinnedBehind && changed.length > 0, pinnedBehind }
+  } catch {
+    return null
+  }
+}
 
 /** PR текущей ветки: статус AI-ревью меняется за минуты, поэтому кэш короче. */
 const CURRENT_PR_TTL_MS = 60_000
@@ -222,6 +268,10 @@ export function createGitProbe(root: string): IGitProbe {
         ':(exclude)vendor', ':(exclude)third_party', ':(exclude)node_modules', ':(exclude,glob)**/*.md',
       ]).catch(() => '')
       return parseTempMarkers(output)
+    },
+
+    specsSync(change) {
+      return inspectSpecsSync(root, change)
     },
 
     currentPr(branch) {

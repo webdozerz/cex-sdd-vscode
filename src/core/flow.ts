@@ -1,4 +1,5 @@
 import type { IAiReview } from './aireview'
+import type { ISpecsSync } from './specsync'
 import { isFixBranch } from './branch'
 import { specUpdateGaps } from './plan'
 import { MIN_PLUGIN_VERSION, PLUGIN_NAME, PLUGIN_OK, type IPluginStatus } from './plugin'
@@ -34,6 +35,7 @@ const ACTION_VERIFY: IAction = { id: 'verify', label: 'Полная провер
 const ACTION_SPEC_GAP: IAction = { id: 'spec-gap', label: 'Расхождение со спекой' }
 const ACTION_SPEC_UPDATE: IAction = { id: 'spec-update', label: 'Обновить change в OpenSpec' }
 const ACTION_INIT_SPECS: IAction = { id: 'init-specs', label: 'Подключить спеки' }
+const ACTION_UPDATE_SPECS: IAction = { id: 'update-specs', label: 'Обновить спеки' }
 const ACTION_PICK_CHANGE: IAction = { id: 'pick-change', label: 'Выбрать change' }
 
 interface IFlowContext {
@@ -45,6 +47,8 @@ interface IFlowContext {
   branchActive?: boolean
   /** AI-ревью PR текущей ветки. */
   aiReview?: IAiReview | null
+  /** Сабмодуль спек против ветки и main OpenSpec. */
+  specsSync?: ISpecsSync | null
 }
 
 /** Для tier 1–2 design.md и plan.md уходят отдельным PR до кода; tier 3 — в одном PR с кодом. */
@@ -136,6 +140,50 @@ export function tasksToTick(state: IChangeState, repoId: TRepoId | null): string
   return group.items.filter((item) => !item.done && merged.has(item.id)).map((item) => item.id)
 }
 
+/**
+ * Стопперы про устаревшие спеки: панель и агент читают сабмодуль, и если он старый — видят старые решения,
+ * задачи и план (особенно когда план ведётся в спеке).
+ */
+function specsSyncBlockers(sync: ISpecsSync | null | undefined, key: string): IBlocker[] {
+  if (!sync) return []
+  if (sync.working === 'behind' || sync.working === 'diverged') {
+    return [
+      {
+        id: 'specs-behind',
+        severity: 'warning',
+        title: 'Спеки в рабочей копии отстают от закреплённых в ветке',
+        hint: 'После git pull или смены ветки сабмодуль OpenSpec не обновился: панель и агент читают старую версию спеки, решений и плана',
+        todo: 'Нажмите «Синхронизировать спеки» — выполнится git submodule update --init. Коммит не нужен',
+        action: { id: 'sync-specs', label: 'Синхронизировать спеки' },
+      },
+    ]
+  }
+  if (sync.working === 'ahead') {
+    return [
+      {
+        id: 'specs-ahead',
+        severity: 'info',
+        title: 'Спеки обновлены локально, но обновление не закоммичено',
+        hint: 'Сабмодуль OpenSpec новее, чем закреплён в ветке',
+        todo: `Закоммитьте его отдельным PR в develop: chore(${key || '<ключ>'}): bump openspec — не смешивая с кодом`,
+      },
+    ]
+  }
+  if (sync.changeUpdated) {
+    return [
+      {
+        id: 'specs-change-updated',
+        severity: 'warning',
+        title: 'Спека этого change в OpenSpec новее, чем закреплённая в ветке',
+        hint: 'В main OpenSpec изменились файлы change — решения по расхождениям, задачи или план. Панель и агент видят старую версию',
+        todo: `Нажмите «Обновить спеки до main OpenSpec». Обновление сабмодуля уходит отдельным PR в develop: chore(${key || '<ключ>'}): bump openspec`,
+        action: { id: 'bump-specs', label: 'Обновить спеки до main OpenSpec' },
+      },
+    ]
+  }
+  return []
+}
+
 function isRepoOutside(state: IChangeState, repoId: TRepoId | null): boolean {
   return repoId !== null && state.affectedAreas.length > 0 && !state.affectedAreas.includes(repoId)
 }
@@ -208,6 +256,8 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
     })
     return blockers
   }
+
+  blockers.push(...specsSyncBlockers(ctx.specsSync, state.key))
 
   if (state.specDir === null) {
     const fix = isFixBranch(ctx.branch)
@@ -430,7 +480,7 @@ function computeActions(state: IChangeState, ctx: IFlowContext, blockers: IBlock
   if (review && review.state !== 'draft' && review.state !== 'running') {
     actions.push({ id: 'ai-review', label: review.state === 'not-run' ? 'Запустить AI-ревью' : 'Перезапустить AI-ревью' })
   }
-  actions.push(ACTION_VERIFY_FAST, ACTION_VERIFY)
+  actions.push(ACTION_VERIFY_FAST, ACTION_VERIFY, ACTION_UPDATE_SPECS)
   return actions
 }
 
@@ -498,6 +548,7 @@ export function noKeyActions(specsAvailable: boolean, plugin: IPluginStatus = PL
     ? [
         { id: 'start', label: 'Начать задачу', primary: true },
         { id: 'pick-change', label: 'Выбрать change' },
+        ACTION_UPDATE_SPECS,
       ]
     : [{ id: 'init-specs', label: 'Подключить спеки', primary: true }]
   return withPluginAction(actions, plugin)

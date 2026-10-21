@@ -82,7 +82,7 @@ describe('сведения о репозитории', () => {
     expect(verifyCommand(root, false)).toBe('pnpm verify')
     expect(verifyCommand(root, true)).toBe('pnpm verify:fast')
     expect(initSpecsCommand(root)).toBe('pnpm specs')
-    expect(bumpSpecsCommand(root)).toBe('git submodule update --remote vendor/openspec')
+    expect(bumpSpecsCommand(root)).toBe('git submodule update --init --remote vendor/openspec')
   })
 
   it('exchange без package.json: make verify и голый git', () => {
