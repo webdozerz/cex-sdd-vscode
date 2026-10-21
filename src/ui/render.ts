@@ -54,15 +54,27 @@ function renderStep(step: IFlowStep): string {
   </li>`
 }
 
+/** Подпись ссылки на файл: «Открыть spec-gaps.md», для метки — «Открыть Form.vue:12». */
+function openLabel(file: string): string {
+  return `Открыть ${file.split(/[\\/]/).filter(Boolean).pop() ?? file}`
+}
+
 function renderBlocker(blocker: IBlocker): string {
   const hint = blocker.hint ? `<div class="blocker__hint">${escapeHtml(blocker.hint)}</div>` : ''
-  const open = blocker.file
-    ? `<button class="link" data-open="${escapeHtml(blocker.file)}">Открыть</button>`
+  const todo = blocker.todo
+    ? `<div class="blocker__todo"><span class="blocker__todo-label">Что сделать:</span> ${escapeHtml(blocker.todo)}</div>`
     : ''
+  const action = blocker.action
+    ? `<button class="secondary blocker__action" data-action="${escapeHtml(blocker.action.id)}">${escapeHtml(blocker.action.label)}</button>`
+    : ''
+  const open = blocker.file
+    ? `<button class="link" data-open="${escapeHtml(blocker.file)}">${escapeHtml(openLabel(blocker.file))}</button>`
+    : ''
+  const links = action || open ? `<div class="blocker__links">${action}${open}</div>` : ''
   return `<li class="blocker blocker_${blocker.severity}">
     <span class="blocker__icon" aria-hidden="true">${SEVERITY_ICON[blocker.severity]}</span>
     <div class="blocker__body">
-      <div class="blocker__title">${escapeHtml(blocker.title)}</div>${hint}${open}
+      <div class="blocker__title">${escapeHtml(blocker.title)}</div>${hint}${todo}${links}
     </div>
   </li>`
 }
@@ -229,6 +241,12 @@ const STYLE = `
   .blocker_info { border-color: var(--vscode-editorInfo-foreground); }
   .blocker__title { font-weight: 600; line-height: 1.4; }
   .blocker__hint { margin-top: 2px; font-size: 12px; color: var(--vscode-descriptionForeground); line-height: 1.4; }
+  .blocker__body { min-width: 0; }
+  .blocker__todo { margin-top: 6px; font-size: 12px; line-height: 1.4; }
+  .blocker__todo-label { font-weight: 600; }
+  .blocker__links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
+  .blocker__links .link { margin-top: 0; }
+  .blocker__action { padding: 3px 10px; }
   .ok { color: var(--vscode-testing-iconPassed); margin: 0; }
   .progress { margin-bottom: 10px; }
   .progress__head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; margin-bottom: 4px; }

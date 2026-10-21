@@ -32,7 +32,9 @@ const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 } as const
 const ACTION_VERIFY_FAST: IAction = { id: 'verify-fast', label: 'Быстрая проверка' }
 const ACTION_VERIFY: IAction = { id: 'verify', label: 'Полная проверка (verify)' }
 const ACTION_SPEC_GAP: IAction = { id: 'spec-gap', label: 'Расхождение со спекой' }
-const ACTION_SPEC_UPDATE: IAction = { id: 'spec-update', label: 'Обновить change в OpenSpec (/cex-sdd:spec-update)' }
+const ACTION_SPEC_UPDATE: IAction = { id: 'spec-update', label: 'Обновить change в OpenSpec' }
+const ACTION_INIT_SPECS: IAction = { id: 'init-specs', label: 'Подключить спеки' }
+const ACTION_PICK_CHANGE: IAction = { id: 'pick-change', label: 'Выбрать change' }
 
 interface IFlowContext {
   repoId: TRepoId | null
@@ -86,10 +88,13 @@ function tempExceptionBlockers(state: IChangeState): IBlocker[] {
     blockers.push({
       id: 'temp-exceptions',
       severity: integration ? 'error' : 'info',
-      title: integration ? `Не сняты временные исключения: ${markers.length}` : `Временные исключения: ${markers.length}`,
+      title: integration ? `Не сняты временные исключения: ${markers.length}` : `Временные исключения в коде: ${markers.length}`,
       hint: integration
-        ? 'До закрытия шага «Интеграция» все метки sdd-temp в коде и строки таблицы в design.md должны быть сняты'
-        : 'Снять до шага «Интеграция». Список меток — ниже',
+        ? 'Остался только шаг «Интеграция», а в коде ещё есть метки sdd-temp — сознательные «пока так»'
+        : 'В коде есть метки sdd-temp — сознательные «пока так». Сейчас это нормально',
+      todo: integration
+        ? 'Уберите каждую метку из списка ниже (сделайте то, что откладывали) и удалите её строку из таблицы «Временные исключения» в design.md'
+        : 'Ничего, пока идёт работа. Снимите метки до шага «Интеграция» — список ниже',
       file: `${markers[0].file}:${markers[0].line}`,
     })
   }
@@ -99,7 +104,8 @@ function tempExceptionBlockers(state: IChangeState): IBlocker[] {
       id: 'temp-table-missing',
       severity: 'warning',
       title: 'В design.md нет раздела «Временные исключения»',
-      hint: 'Каждая метка sdd-temp в коде записывается строкой таблицы: что, где, почему, когда снять',
+      hint: 'Каждая метка sdd-temp в коде должна быть описана строкой таблицы в design.md',
+      todo: 'Добавьте в design.md раздел «## Временные исключения» с таблицей: что, где, почему, когда снять — по строке на метку',
       ...(state.designDir ? { file: `${state.designDir}/design.md` } : {}),
     })
   } else if (rows !== null && rows !== markers.length) {
@@ -107,7 +113,8 @@ function tempExceptionBlockers(state: IChangeState): IBlocker[] {
       id: 'temp-table-mismatch',
       severity: 'warning',
       title: `Временные исключения расходятся: в design.md ${rows}, в коде ${markers.length} меток sdd-temp`,
-      hint: 'Таблица в design.md и метки в коде описывают одни и те же исключения: добавьте недостающее или уберите снятое',
+      hint: 'Таблица в design.md и метки в коде должны описывать одни и те же исключения',
+      todo: 'Сверьте таблицу в design.md со списком меток ниже: добавьте недостающие строки и удалите строки снятых меток',
       ...(state.designDir ? { file: `${state.designDir}/design.md` } : {}),
     })
   }
@@ -194,8 +201,10 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
     blockers.push({
       id: 'specs-missing',
       severity: 'error',
-      title: 'Спека не подключена: нет openspec/changes',
-      hint: 'Подключите сабмодуль OpenSpec кнопкой «Подключить спеки» (нужен доступ на чтение к CryptoExch/OpenSpec)',
+      title: 'Спеки не подключены',
+      hint: 'В проекте нет openspec/changes: сабмодуль OpenSpec не скачан. Без него панель не видит change',
+      todo: 'Нажмите «Подключить спеки» (нужен доступ на чтение к CryptoExch/OpenSpec), затем Reload Window',
+      action: ACTION_INIT_SPECS,
     })
     return blockers
   }
@@ -207,8 +216,12 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
       severity: fix ? 'info' : 'error',
       title: `Не найден change для ${state.key}`,
       hint: fix
-        ? 'Если задача без спеки — PR получает метку no-spec и строку «Без спеки: причина». Если change есть, выберите его вручную'
-        : 'Ключ подзадачи с change связан через родителя в Jira, по имени change его не найти: выберите change вручную. Если change нет в списке, подтяните спеку: нужен отдельный коммит chore(TN-…): bump openspec',
+        ? 'Для fix-ветки это нормально, если задача без спеки'
+        : 'По ключу ветки change не нашёлся: ключ подзадачи связан с change через родителя в Jira',
+      todo: fix
+        ? 'Задача без спеки — поставьте на PR метку no-spec и строку «Без спеки: причина». Есть change — нажмите «Выбрать change»'
+        : 'Нажмите «Выбрать change» и укажите change задачи. Нет его в списке — спеки в develop старые: нужен отдельный PR chore(TN-…): bump openspec',
+      action: ACTION_PICK_CHANGE,
     })
     return blockers
   }
@@ -220,19 +233,27 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
       id: 'repo-not-affected',
       severity: 'info',
       title: `Репозитория ${repoId} нет в affected_areas этого change`,
-      hint: `Затронуты: ${state.affectedAreas.join(', ')}. Если работа нужна и здесь, change правит аналитик через /opsx:update`,
+      hint: `Change затрагивает: ${state.affectedAreas.join(', ')}`,
+      todo: 'Если работа нужна и в этом репозитории — попросите аналитика добавить его в change (/opsx:update)',
       file: `${state.specDir}/.openspec.yaml`,
     })
   }
 
   if (!state.hasTasksFile) {
-    blockers.push({ id: 'no-tasks', severity: 'warning', title: 'В change нет tasks.md', file: state.specDir })
+    blockers.push({
+      id: 'no-tasks',
+      severity: 'warning',
+      title: 'В change нет tasks.md',
+      todo: 'Сообщите аналитику change: без tasks.md непонятно, что делать в этом репозитории',
+      file: state.specDir,
+    })
   } else if (repoId && state.affectedAreas.includes(repoId) && !state.tasks.some((group) => group.repo === repoId)) {
     blockers.push({
       id: 'no-task-group',
       severity: 'warning',
       title: `В tasks.md нет группы «${repoId}»`,
       hint: 'Репозиторий есть в affected_areas, но задач для него не описано',
+      todo: 'Сообщите аналитику change: нужна группа задач этого репозитория в tasks.md',
       file: `${state.specDir}/tasks.md`,
     })
   }
@@ -243,15 +264,18 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
       severity: 'warning',
       title: 'Нет design.md и plan.md',
       hint: isSpecPlans(state)
-        ? `Их создаёт /cex-sdd:apply в спеке, ${state.designDir}/, отдельным PR в репозиторий спек; после мержа — обновить спеки`
-        : `Их создаёт /cex-sdd:apply в docs/changes/${state.changeName}/ и ждёт вашего согласия`,
+        ? `Дизайн и план этого репозитория ведутся в спеке, ${state.designDir}/, и уходят PR в репозиторий спек`
+        : 'Код начинается после дизайна и плана',
+      todo: 'Нажмите «Спроектировать и спланировать»: агент напишет design.md и plan.md и покажет их вам до коммита',
+      action: { id: 'continue', label: 'Спроектировать и спланировать' },
     })
   } else if (needsDesignPr(state) && state.designMerged === false) {
     blockers.push({
       id: 'design-not-merged',
       severity: 'warning',
       title: 'Дизайн ещё не в develop',
-      hint: `Для tier ${state.tier} код начинается после мержа design PR (ветка feat/${state.key}-<slug>-design, ревью тимлида)`,
+      hint: `Для tier ${state.tier} код начинается только после мержа PR с design.md и plan.md`,
+      todo: `Откройте PR из ветки feat/${state.key}-<slug>-design и попросите тимлида о ревью. После мержа панель сама переключится на реализацию`,
       ...(state.designDir ? { file: `${state.designDir}/design.md` } : {}),
     })
   }
@@ -259,21 +283,24 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
   const gapsFile = `${state.designDir}/spec-gaps.md`
   const toUpdate = new Set(specUpdateGaps(state.gaps).map((gap) => gap.n))
   for (const gap of state.gaps) {
-    const blocks = gap.blocks ? `Блокирует: ${gap.blocks}. ` : ''
+    const blocks = gap.blocks ? `Блокирует: ${gap.blocks.replace(/[.\s]+$/, '')}. ` : ''
     if (!gap.resolved) {
       blockers.push({
         id: `spec-gap-${gap.n}`,
         severity: 'warning',
         title: `Расхождение со спекой №${gap.n}: ${gap.title}`,
-        hint: `${blocks}Ждёт решения тимлида (поле «Решение» в spec-gaps.md). Если решат «обновить change» — лид вносит правку в OpenSpec скиллом /cex-sdd:spec-update`,
+        hint: `${blocks}Поле «Решение» в spec-gaps.md пустое — решения тимлида ещё нет`,
+        todo: 'Покажите запись тимлиду: он выбирает «обновить change», «баг кода» или «вне рамок» и пишет это в «Решение». Незатронутые шаги плана можно продолжать',
         file: gapsFile,
       })
     } else if (toUpdate.has(gap.n)) {
       blockers.push({
         id: `spec-update-missing-${gap.n}`,
         severity: 'warning',
-        title: `Расхождение №${gap.n}: решено обновить change, правки в OpenSpec нет`,
-        hint: `${blocks}Код с отступлением от спеки не мержится, пока правка change не открыта. Лид — кнопка «Обновить change в OpenSpec» (/cex-sdd:spec-update, нужно право записи в OpenSpec); в PR кода — строка «Правка спеки: OpenSpec#NNN»`,
+        title: `Расхождение №${gap.n}: решено обновить change, а правки в OpenSpec нет`,
+        hint: `${blocks}Код с отступлением от спеки не мержится, пока не открыт PR с правкой change в OpenSpec`,
+        todo: 'Лид: нажмите «Обновить change в OpenSpec» — агент внесёт решение в спеку и откроет PR. Нет права записи в OpenSpec — передайте лиду. Правка уже есть — допишите в конец «Решения» ссылку «→ OpenSpec #N». В PR кода — строка «Правка спеки: OpenSpec#N»',
+        action: ACTION_SPEC_UPDATE,
         file: gapsFile,
       })
     }
@@ -284,9 +311,10 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
     blockers.push({
       id: 'tasks-unticked',
       severity: 'info',
-      title: `Не отмечены в tasks.md OpenSpec: ${unticked.join(', ')}`,
-      hint: 'Шаги плана этих задач смержены. Без отметок change не архивируется: лид отмечает задачи своей группы скиллом /cex-sdd:spec-update. Если они уже отмечены в OpenSpec — обновите спеки',
-      file: `${state.specDir}/tasks.md`,
+      title: `Отметьте сданные задачи в OpenSpec: ${unticked.join(', ')}`,
+      hint: 'Все шаги plan.md по этим задачам смержены в develop, а в tasks.md спеки они ещё не отмечены. Без отметок change не архивируют',
+      todo: 'Лид: нажмите «Обновить change в OpenSpec» — агент найдёт PR задач и откроет PR в OpenSpec с отметками. Уже отмечены в OpenSpec — значит, спеки в develop старые: обновите сабмодуль отдельным PR chore(<ключ>): bump openspec',
+      action: ACTION_SPEC_UPDATE,
     })
   }
 
@@ -297,7 +325,8 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
       id: 'acceptance-rejected',
       severity: 'error',
       title: 'Приёмка QA: не принято',
-      hint: 'Разберите дефекты в acceptance.md, исправьте код и подготовьте новый rc',
+      hint: 'QA нашёл дефекты на rc-сборке',
+      todo: 'Разберите дефекты в acceptance.md, исправьте код и подготовьте новый rc',
       file: `${state.specDir}/acceptance.md`,
     })
   }
@@ -407,6 +436,7 @@ function computeActions(state: IChangeState, ctx: IFlowContext, blockers: IBlock
 
 /** Стоппер про плагин: без него нет команд /cex-sdd:*, на которых держатся «Спроектировать», «Продолжить» и spec-gap. */
 export function pluginBlockers(plugin: IPluginStatus = PLUGIN_OK): IBlocker[] {
+  const action = (label: string): IAction => ({ id: 'install-plugin', label })
   switch (plugin.state) {
     case 'missing':
       return [
@@ -414,7 +444,9 @@ export function pluginBlockers(plugin: IPluginStatus = PLUGIN_OK): IBlocker[] {
           id: 'plugin-missing',
           severity: 'error',
           title: `Не установлен плагин ${PLUGIN_NAME}`,
-          hint: 'Без него нет команд /cex-sdd:apply и /cex-sdd:spec-gap. Нужны маркетплейс crypton и плагин cex-sdd',
+          hint: 'Без него не работают кнопки, которые запускают агента: /cex-sdd:apply, /cex-sdd:spec-gap, /cex-sdd:spec-update',
+          todo: 'Нажмите «Установить плагин» — команды выполнятся в терминале. Затем Reload Window',
+          action: action(`Установить плагин ${PLUGIN_NAME}`),
         },
       ]
     case 'disabled':
@@ -424,6 +456,8 @@ export function pluginBlockers(plugin: IPluginStatus = PLUGIN_OK): IBlocker[] {
           severity: 'error',
           title: `Плагин ${PLUGIN_NAME} отключён`,
           hint: 'Команды /cex-sdd:* недоступны, пока плагин выключен в настройках Claude Code',
+          todo: 'Нажмите «Включить плагин», затем Reload Window',
+          action: action(`Включить плагин ${PLUGIN_NAME}`),
         },
       ]
     case 'outdated':
@@ -433,8 +467,10 @@ export function pluginBlockers(plugin: IPluginStatus = PLUGIN_OK): IBlocker[] {
           severity: 'warning',
           title: `Плагин ${PLUGIN_NAME} ${plugin.version ?? ''} устарел (нужна ${MIN_PLUGIN_VERSION} или новее)`,
           hint: plugin.scope
-            ? `В этом проекте действует установка плагина для проекта (scope ${plugin.scope}), а не для пользователя: обновите её — claude plugin update ${PLUGIN_NAME}@… --scope ${plugin.scope} в корне проекта, кнопка ниже делает это`
-            : 'В старых версиях нет /cex-sdd:spec-update (правка change и отметка задач в OpenSpec), а до 0.6.0 в ветку и PR шёл ключ родителя вместо подзадачи',
+            ? `В этом проекте действует установка плагина для проекта (scope ${plugin.scope}), и устарела именно она — обновление для пользователя её не заменяет`
+            : 'В старых версиях нет /cex-sdd:spec-update (правка change и отметка задач в OpenSpec)',
+          todo: `Нажмите «Обновить плагин»${plugin.scope ? ` — обновится установка этого проекта (--scope ${plugin.scope})` : ''}. Затем Reload Window`,
+          action: action(`Обновить плагин ${PLUGIN_NAME}`),
         },
       ]
     default:

@@ -52,6 +52,25 @@ describe('render', () => {
     expect(html).toContain('родитель TN-123')
   })
 
+  it('стоппер: «Что сделать», кнопка действия и ссылка с именем файла', () => {
+    const html = renderBody({
+      ...FLOW,
+      blockers: [
+        {
+          id: 'tasks-unticked',
+          severity: 'info',
+          title: 'Отметьте',
+          todo: 'нажмите <кнопку>',
+          action: { id: 'spec-update', label: 'Обновить change в OpenSpec' },
+          file: 'docs/changes/x/spec-gaps.md',
+        },
+      ],
+    })
+    expect(html).toContain('<span class="blocker__todo-label">Что сделать:</span> нажмите &lt;кнопку&gt;')
+    expect(html).toContain('class="secondary blocker__action" data-action="spec-update">Обновить change в OpenSpec</button>')
+    expect(html).toContain('data-open="docs/changes/x/spec-gaps.md">Открыть spec-gaps.md</button>')
+  })
+
   it('показывает прогресс плана', () => {
     expect(renderBody(FLOW)).toContain('План: 1 из 2 шагов')
   })

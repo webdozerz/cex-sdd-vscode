@@ -99,7 +99,7 @@ describe('стопперы', () => {
   it('change не найден в fix-ветке — только инфо про no-spec', async () => {
     const flow = await load({ 'openspec/changes/tn-999-other/.openspec.yaml': 'affected_areas: [exchange]\n' }, { branch: 'fix/TN-124-btn' })
     expect(flow.blockers[0]).toMatchObject({ id: 'change-not-found', severity: 'info' })
-    expect(flow.blockers[0].hint).toContain('no-spec')
+    expect(flow.blockers[0].todo).toContain('no-spec')
   })
 
   it('нет design.md — предупреждение и подсказка про /cex-sdd:apply', async () => {

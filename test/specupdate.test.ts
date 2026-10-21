@@ -47,7 +47,8 @@ describe('правка change в OpenSpec (/cex-sdd:spec-update)', () => {
   it('открытое расхождение: ждёт решения, кнопки нет', async () => {
     const flow = await load({ ...SPEC_FILES, ...DESIGN_FILES, [`${DESIGN}/spec-gaps.md`]: GAPS_OPEN }, { designMerged: true })
     expect(ids(flow)).toEqual(['spec-gap-1'])
-    expect(flow.blockers[0].hint).toContain('/cex-sdd:spec-update')
+    expect(flow.blockers[0].todo).toContain('Покажите запись тимлиду')
+    expect(flow.blockers[0].action).toBeUndefined()
     expect(actionIds(flow)).not.toContain('spec-update')
     expect(flow.specUpdate).toEqual({ gaps: [], tasks: [] })
   })
@@ -56,7 +57,9 @@ describe('правка change в OpenSpec (/cex-sdd:spec-update)', () => {
     const gaps = '## 1. Нет прав\n- **Решение:** обновить change, вариант 1\n'
     const flow = await load({ ...SPEC_FILES, ...DESIGN_FILES, [`${DESIGN}/spec-gaps.md`]: gaps }, { designMerged: true })
     expect(ids(flow)).toEqual(['spec-update-missing-1'])
-    expect(flow.blockers[0].hint).toContain('Правка спеки: OpenSpec#NNN')
+    expect(flow.blockers[0].todo).toContain('нажмите «Обновить change в OpenSpec»')
+    expect(flow.blockers[0].todo).toContain('«→ OpenSpec #N»')
+    expect(flow.blockers[0].action?.id).toBe('spec-update')
     expect(actionIds(flow)).toContain('spec-update')
     expect(flow.specUpdate.gaps).toEqual([{ n: '1', title: 'Нет прав' }])
   })
@@ -78,11 +81,11 @@ describe('правка change в OpenSpec (/cex-sdd:spec-update)', () => {
   it('шаги раздела tasks.md 2.1 смержены, задача в спеке не отмечена — напоминание и кнопка', async () => {
     const flow = await load({ ...SPEC_FILES, ...DESIGN_FILES }, { designMerged: true, planSources: MERGED_SOURCES })
     expect(flow.specUpdate.tasks).toEqual(['2.1'])
-    expect(flow.blockers.find((b) => b.id === 'tasks-unticked')).toMatchObject({
-      severity: 'info',
-      title: 'Не отмечены в tasks.md OpenSpec: 2.1',
-      file: `${CHANGE}/tasks.md`,
-    })
+    const blocker = flow.blockers.find((b) => b.id === 'tasks-unticked')
+    expect(blocker).toMatchObject({ severity: 'info', title: 'Отметьте сданные задачи в OpenSpec: 2.1', action: { id: 'spec-update' } })
+    expect(blocker?.todo).toContain('нажмите «Обновить change в OpenSpec»')
+    // tasks.md в сабмодуле только читается: ссылка на него ничего не даёт.
+    expect(blocker?.file).toBeUndefined()
     expect(actionIds(flow)).toContain('spec-update')
   })
 
@@ -168,7 +171,7 @@ describe('план в репозитории спек', () => {
   it('.cex-sdd.yaml plans: spec без плана — подсказка про PR в спеку', async () => {
     const flow = await load({ ...SPEC_FILES, '.cex-sdd.yaml': 'plans: spec\n' })
     expect(flow.plansLocation).toBe('spec')
-    expect(flow.blockers.find((b) => b.id === 'no-design')?.hint).toContain('отдельным PR в репозиторий спек')
+    expect(flow.blockers.find((b) => b.id === 'no-design')?.hint).toContain('уходят PR в репозиторий спек')
   })
 
   it('настройка plansLocation: code перекрывает каталог в спеке', async () => {
