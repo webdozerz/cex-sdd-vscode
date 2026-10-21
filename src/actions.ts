@@ -9,6 +9,7 @@ import { listChanges, type IChangeInfo } from './core/change'
 import type { IGitProbe } from './core/model'
 import { PLUGIN_ID, readPluginStatus } from './core/plugin'
 import { bumpSpecsCommand, initSpecsCommand, specRepoUrl, specSubmodulePath, verifyCommand } from './core/repoinfo'
+import { chainCommands, detectShellKind, shellQuote, type TShellKind } from './core/shell'
 import { buildSpecPrPrompt } from './core/specpr'
 import type { TActionId, TFlowModel, TRepoId } from './core/types'
 import { git, inspectSpecs } from './gitprobe'
@@ -35,8 +36,8 @@ function runInTerminal(root: string, command: string): void {
   terminal.sendText(command)
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
+function terminalShell(): TShellKind {
+  return detectShellKind(vscode.env.shell, process.platform)
 }
 
 /** Передаёт запрос в Claude Code: через его команду, а если её нет — через `claude` в терминале. */
@@ -50,7 +51,14 @@ async function openClaude(root: string, prompt: string): Promise<void> {
     )
     return
   }
-  runInTerminal(root, `claude ${shellQuote(prompt)}`)
+  const quoted = shellQuote(prompt, terminalShell())
+  if (quoted) {
+    runInTerminal(root, `claude ${quoted}`)
+    return
+  }
+  // cmd: запрос в аргумент не передать без искажений — запускаем claude, запрос в буфере.
+  runInTerminal(root, 'claude')
+  void vscode.window.showInformationMessage('Запрос скопирован в буфер: вставьте его в Claude Code в терминале и отправьте.')
 }
 
 /** Установка, включение или обновление плагина cex-sdd: команды из состояния плагина, в терминале и после подтверждения. */
@@ -72,7 +80,7 @@ export async function installPlugin(deps: IActionDeps): Promise<void> {
     },
     'Выполнить',
   )
-  if (confirm) runInTerminal(deps.root, status.commands.join(' && '))
+  if (confirm) runInTerminal(deps.root, chainCommands(status.commands, terminalShell()))
 }
 
 /** Перед командами /cex-sdd:*: без плагина они не существуют. false — запуск отменён. */

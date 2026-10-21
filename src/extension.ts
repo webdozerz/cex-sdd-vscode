@@ -7,9 +7,10 @@ import { handleAction, installPlugin, pickChangeManually, startTask, type IActio
 import { detectRepoId, isRepoId } from './core/branch'
 import { loadFlowModel } from './core/model'
 import { readPluginStatus } from './core/plugin'
+import { createSerialRunner } from './core/serial'
 import type { TFlowModel } from './core/types'
 import { watchGit } from './git'
-import { createGitProbe } from './gitprobe'
+import { clearPrCache, createGitProbe } from './gitprobe'
 import { FlowViewProvider } from './ui/FlowViewProvider'
 
 const REFRESH_DEBOUNCE_MS = 300
@@ -102,11 +103,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     statusBar.show()
   }
 
-  async function refresh(): Promise<void> {
+  // Опрос, фокус окна, события файлов и кнопки вызывают refresh одновременно: расчёты не должны накладываться.
+  const refresh = createSerialRunner(async () => {
     model = await compute()
     provider.update(model)
     updateStatusBar(model)
-  }
+  })
 
   let timer: NodeJS.Timeout | undefined
   const scheduleRefresh = (): void => {
@@ -145,7 +147,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration('sddFlow')) scheduleRefresh()
     }),
-    vscode.commands.registerCommand('sddFlow.refresh', () => refresh()),
+    vscode.commands.registerCommand('sddFlow.refresh', () => {
+      clearPrCache()
+      return refresh()
+    }),
     vscode.commands.registerCommand('sddFlow.focus', () =>
       vscode.commands.executeCommand(`${FlowViewProvider.viewType}.focus`),
     ),

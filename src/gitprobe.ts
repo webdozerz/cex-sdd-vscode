@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 
+import { createTtlCache } from './core/cache'
 import type { IGitProbe } from './core/model'
 import { parseTempMarkers } from './core/plan'
 import { specSubmodulePath } from './core/repoinfo'
@@ -72,8 +73,21 @@ export function parsePrSteps(body: string): string[] {
     .filter((id) => /^[\w.-]+$/.test(id))
 }
 
+/** Ответы gh живут 2 минуты: панель обновляется каждые 30 секунд и при фокусе окна, а PR меняются реже. */
+const PR_CACHE_TTL_MS = 120_000
+const prCache = createTtlCache<IPrSteps[] | null>(PR_CACHE_TTL_MS)
+
+/** Сброс кэша PR: кнопка «Обновить» должна показывать свежее состояние. */
+export function clearPrCache(): void {
+  prCache.clear()
+}
+
+function listPrSteps(root: string, key: string): Promise<IPrSteps[] | null> {
+  return prCache.get(`${root}\0${key.toUpperCase()}`, () => fetchPrSteps(root, key))
+}
+
 /** PR задачи через gh (репозиторий берётся из origin). null — gh не установлен или нет доступа. */
-async function listPrSteps(root: string, key: string): Promise<IPrSteps[] | null> {
+async function fetchPrSteps(root: string, key: string): Promise<IPrSteps[] | null> {
   try {
     const output = await run('gh', root, [
       'pr', 'list', '--state', 'all', '--limit', '100',
