@@ -1,3 +1,5 @@
+import type { IAiReview } from './aireview'
+
 export const REPO_IDS = ['exchange', 'client-fe', 'admin-fe', 'qa-tests'] as const
 
 export type TRepoId = (typeof REPO_IDS)[number]
@@ -15,7 +17,8 @@ export type TActionId =
   | 'start'
   | 'continue'
   | 'spec-gap'
-  | 'spec-pr'
+  | 'spec-update'
+  | 'ai-review'
   | 'verify'
   | 'verify-fast'
   | 'pick-change'
@@ -96,9 +99,7 @@ export interface ISpecGap {
   resolved: boolean
   /** Решение тимлида — обновить change: нужна правка спеки. */
   needsSpecUpdate: boolean
-  /** Поле «Правка спеки»: not-needed — «не нужна»; unknown — поля нет (записи до 0.6.0) или оно не заполнено. */
-  specEdit: 'needed' | 'not-needed' | 'unknown'
-  /** Поле «PR спеки»: ссылка или номер PR в репозитории спек; null — PR нет. */
+  /** Правка change в OpenSpec: «OpenSpec #42» из «→ OpenSpec #42» в решении; null — ссылки нет. */
   specPr: string | null
 }
 
@@ -192,8 +193,13 @@ export interface IChangeFlow {
   plansLocation: TPlansLocation
   /** Каталог плана и журнала расхождений относительно корня проекта. */
   plansDir: string | null
-  /** Расхождения, по которым можно предложить PR с правкой спеки. */
-  specPrCandidates: Array<{ n: string; title: string }>
+  /** Что лид вносит в OpenSpec скиллом /cex-sdd:spec-update. */
+  specUpdate: {
+    /** Расхождения с решением «обновить change» без ссылки на правку. */
+    gaps: Array<{ n: string; title: string }>
+    /** Задачи своей группы tasks.md, чьи шаги плана смержены, а в спеке они не отмечены. */
+    tasks: string[]
+  }
   steps: IFlowStep[]
   blockers: IBlocker[]
   /** null — plan.md ещё нет. */
@@ -211,6 +217,8 @@ export interface IChangeFlow {
   scopeTasks: number | null
   tempMarkers: ITempMarker[]
   currentStep: ICurrentStep | null
+  /** AI-ревью PR текущей ветки; null — workflow нет, PR нет или gh недоступен. */
+  aiReview: IAiReview | null
   actions: IAction[]
   next: string | null
 }

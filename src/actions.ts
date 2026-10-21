@@ -7,12 +7,12 @@ import * as vscode from 'vscode'
 import { buildBranchName, slugFromChange } from './core/branch'
 import { listChanges, type IChangeInfo } from './core/change'
 import type { IGitProbe } from './core/model'
-import { PLUGIN_ID, readPluginStatus } from './core/plugin'
-import { bumpSpecsCommand, initSpecsCommand, specRepoUrl, specSubmodulePath, verifyCommand } from './core/repoinfo'
+import { MIN_PLUGIN_VERSION, PLUGIN_ID, readPluginStatus } from './core/plugin'
+import { bumpSpecsCommand, initSpecsCommand, specSubmodulePath, verifyCommand } from './core/repoinfo'
 import { chainCommands, detectShellKind, shellQuote, type TShellKind } from './core/shell'
-import { buildSpecPrPrompt } from './core/specpr'
+import { buildSpecUpdatePrompt } from './core/specupdate'
 import type { TActionId, TFlowModel, TRepoId } from './core/types'
-import { git, inspectSpecs } from './gitprobe'
+import { git, inspectSpecs, restartAiReview } from './gitprobe'
 
 const CLAUDE_OPEN_COMMAND = 'claude-vscode.primaryEditor.open'
 const TERMINAL_NAME = 'SDD Flow'
@@ -83,9 +83,20 @@ export async function installPlugin(deps: IActionDeps): Promise<void> {
   if (confirm) runInTerminal(deps.root, chainCommands(status.commands, terminalShell()))
 }
 
-/** Перед командами /cex-sdd:*: без плагина они не существуют. false — запуск отменён. */
-async function ensurePlugin(deps: IActionDeps): Promise<boolean> {
+/**
+ * Перед командами /cex-sdd:*: без плагина они не существуют. false — запуск отменён.
+ * requireCurrent — команда появилась в MIN_PLUGIN_VERSION (spec-update), в устаревшем плагине её нет.
+ */
+async function ensurePlugin(deps: IActionDeps, requireCurrent = false): Promise<boolean> {
   const status = readPluginStatus(homedir(), deps.root)
+  if (status.state === 'outdated' && requireCurrent) {
+    const choice = await vscode.window.showWarningMessage(
+      `Плагин cex-sdd ${status.version ?? ''} устарел: /cex-sdd:spec-update есть с ${MIN_PLUGIN_VERSION}.`,
+      'Обновить',
+    )
+    if (choice) await installPlugin(deps)
+    return false
+  }
   if (status.state !== 'missing' && status.state !== 'disabled') return true
   const verb = status.state === 'missing' ? 'Установить' : 'Включить'
   const choice = await vscode.window.showWarningMessage(
@@ -280,60 +291,70 @@ export async function reportSpecGap(deps: IActionDeps): Promise<void> {
 }
 
 /**
- * PR в репозиторий спек с правкой change по записи spec-gaps.md. Расширение ничего не пушит само:
- * запрос уходит в Claude Code, агент готовит правку в отдельном клоне и ждёт подтверждения на push и PR.
+ * Правка change в OpenSpec скиллом /cex-sdd:spec-update: решения тимлида по spec-gap и отметка сданных задач.
+ * Расширение ничего не пушит само: скилл работает в отдельном клоне OpenSpec и ждёт согласия на правку.
  */
-export async function proposeSpecPr(deps: IActionDeps): Promise<void> {
+export async function updateSpec(deps: IActionDeps): Promise<void> {
   const model = deps.getModel()
-  if (model.kind !== 'change' || !model.changeName || !model.plansDir) {
+  if (model.kind !== 'change' || !model.changeName) {
     void vscode.window.showWarningMessage('Сначала выберите change.')
     return
   }
-  const candidates = model.specPrCandidates
-  if (candidates.length === 0) {
-    void vscode.window.showInformationMessage('Нет расхождений, по которым нужен PR с правкой спеки: у всех есть PR или правка не нужна.')
-    return
-  }
-  const gap =
-    candidates.length === 1
-      ? candidates[0]
-      : (
-          await vscode.window.showQuickPick(
-            candidates.map((item) => ({ label: `№${item.n}. ${item.title}`, item })),
-            { placeHolder: 'По какому расхождению подготовить PR в спеку' },
-          )
-        )?.item
-  if (!gap) return
-
+  if (!(await ensurePlugin(deps, true))) return
+  const { gaps, tasks } = model.specUpdate
+  const what = [
+    gaps.length ? `решения по расхождениям ${gaps.map((gap) => `№${gap.n}`).join(', ')}` : null,
+    tasks.length ? `отметки задач ${tasks.join(', ')}` : null,
+  ].filter((part): part is string => part !== null)
   const confirm = await vscode.window.showInformationMessage(
-    `Подготовить PR в репозиторий спек по расхождению №${gap.n}?`,
+    'Обновить change в OpenSpec?',
     {
       modal: true,
-      detail: `Claude Code подготовит правку change ${model.changeName} в отдельном клоне репозитория спек (сабмодуль не трогается), прогонит проверки спек и покажет diff. Push и PR — только после вашего подтверждения. PR — предложение: решают аналитик и тимлид.\n\n${VULNERABILITY_DETAIL}`,
+      detail: `${what.length ? `Внести: ${what.join('; ')}.\n\n` : ''}/cex-sdd:spec-update готовит правку change ${model.changeName} в отдельном клоне OpenSpec (сабмодуль не трогается), показывает, что внесёт, и ждёт вашего согласия; PR — через Gate 1. Нужно право записи в OpenSpec — оно у лидов; без него агент подготовит текст правки для лида.\n\n${VULNERABILITY_DETAIL}`,
     },
-    'Подготовить',
+    'Запустить',
   )
   if (!confirm) return
-  const variant = await vscode.window.showInputBox({
-    title: 'Какой вариант из записи взять за основу',
-    prompt: 'Номер или текст варианта. Пусто — рекомендованный в записи или решение тимлида.',
-  })
-  if (variant === undefined) return
-
   await openClaude(
     deps.root,
-    buildSpecPrPrompt({
+    buildSpecUpdatePrompt({
       change: model.changeName,
       key: model.key,
-      gap,
-      gapsFile: `${model.plansDir}/spec-gaps.md`,
-      submodulePath: specSubmodulePath(deps.root),
-      specRepoUrl: specRepoUrl(deps.root),
+      jira: model.jira,
+      gaps,
+      tasks,
       plansLocation: model.plansLocation,
-      repoId: model.repoId,
-      variant,
+      plansDir: model.plansDir,
     }),
   )
+}
+
+/** Запуск или перезапуск AI-ревью PR текущей ветки меткой ai-review. */
+export async function runAiReview(deps: IActionDeps): Promise<void> {
+  const model = deps.getModel()
+  const review = model.kind === 'change' ? model.aiReview : null
+  if (!review) {
+    void vscode.window.showWarningMessage('У этой ветки нет открытого PR с AI-ревью.')
+    return
+  }
+  const confirm = await vscode.window.showInformationMessage(
+    `${review.state === 'not-run' ? 'Запустить' : 'Перезапустить'} AI-ревью PR #${review.pr}?`,
+    {
+      modal: true,
+      detail: 'Расширение заново поставит на PR метку ai-review, и workflow «AI review» проверит дифф. Прогон тратит токены Claude; прежний комментарий ревью обновится.',
+    },
+    'Запустить',
+  )
+  if (!confirm) return
+  try {
+    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Ставлю метку ai-review на PR #${review.pr}` }, () =>
+      restartAiReview(deps.root, review.pr),
+    )
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Не удалось поставить метку ai-review: ${(error as Error).message}`)
+    return
+  }
+  deps.refresh()
 }
 
 export async function runVerify(deps: IActionDeps, fast: boolean): Promise<void> {
@@ -374,8 +395,10 @@ export function handleAction(deps: IActionDeps, id: TActionId): Promise<void> {
       return continueChange(deps)
     case 'spec-gap':
       return reportSpecGap(deps)
-    case 'spec-pr':
-      return proposeSpecPr(deps)
+    case 'spec-update':
+      return updateSpec(deps)
+    case 'ai-review':
+      return runAiReview(deps)
     case 'verify':
       return runVerify(deps, false)
     case 'verify-fast':

@@ -5,7 +5,10 @@ import * as vscode from 'vscode'
 import type { TActionId, TFlowModel } from '../core/types'
 import { renderBody, renderDocument } from './render'
 
-type TWebviewMessage = { type: 'open'; path: string } | { type: 'action'; id: TActionId }
+type TWebviewMessage = { type: 'open'; path: string } | { type: 'url'; url: string } | { type: 'action'; id: TActionId }
+
+/** Из панели открываются только страницы GitHub: PR, комментарий ревью, лог прогона. */
+const EXTERNAL_URL_RE = /^https:\/\/github\.com\//
 
 export class FlowViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = 'sddFlow.view'
@@ -23,6 +26,7 @@ export class FlowViewProvider implements vscode.WebviewViewProvider {
     view.webview.options = { enableScripts: true }
     view.webview.onDidReceiveMessage((message: TWebviewMessage) => {
       if (message.type === 'open') this.onOpenPath(message.path)
+      else if (message.type === 'url' && EXTERNAL_URL_RE.test(message.url)) void vscode.env.openExternal(vscode.Uri.parse(message.url))
       else if (message.type === 'action') this.onAction(message.id)
     })
     view.onDidDispose(() => {

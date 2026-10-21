@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 
+import { AI_REVIEW_LABEL, type IPrInfo } from './core/aireview'
 import { createTtlCache } from './core/cache'
 import type { IGitProbe } from './core/model'
 import { parseTempMarkers } from './core/plan'
@@ -77,9 +78,56 @@ export function parsePrSteps(body: string): string[] {
 const PR_CACHE_TTL_MS = 120_000
 const prCache = createTtlCache<IPrSteps[] | null>(PR_CACHE_TTL_MS)
 
+/** PR текущей ветки: статус AI-ревью меняется за минуты, поэтому кэш короче. */
+const CURRENT_PR_TTL_MS = 60_000
+const currentPrCache = createTtlCache<IPrInfo | null>(CURRENT_PR_TTL_MS)
+
 /** Сброс кэша PR: кнопка «Обновить» должна показывать свежее состояние. */
 export function clearPrCache(): void {
   prCache.clear()
+  currentPrCache.clear()
+}
+
+interface IGhPr {
+  number: number
+  url: string
+  isDraft: boolean
+  state: IPrInfo['state']
+  statusCheckRollup?: Array<{ workflowName?: string; status?: string; conclusion?: string; detailsUrl?: string }>
+  comments?: Array<{ author?: { login?: string }; url?: string }>
+}
+
+/** PR ветки через gh; null — PR нет, gh не установлен или нет доступа. */
+async function fetchCurrentPr(root: string, branch: string): Promise<IPrInfo | null> {
+  try {
+    const output = await run('gh', root, ['pr', 'view', branch, '--json', 'number,url,isDraft,state,statusCheckRollup,comments'])
+    const pr = JSON.parse(output) as IGhPr
+    return {
+      number: pr.number,
+      url: pr.url,
+      isDraft: pr.isDraft,
+      state: pr.state,
+      checks: (pr.statusCheckRollup ?? []).map((check) => ({
+        workflowName: check.workflowName ?? '',
+        status: check.status ?? '',
+        conclusion: check.conclusion ?? '',
+        detailsUrl: check.detailsUrl ?? '',
+      })),
+      comments: (pr.comments ?? []).map((comment) => ({ author: comment.author?.login ?? '', url: comment.url ?? '' })),
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Перезапуск AI-ревью: метка ai-review ставится заново — workflow срабатывает на событие labeled,
+ * а повторная установка уже стоящей метки события не даёт.
+ */
+export async function restartAiReview(root: string, pr: number): Promise<void> {
+  await run('gh', root, ['pr', 'edit', String(pr), '--remove-label', AI_REVIEW_LABEL]).catch(() => '')
+  await run('gh', root, ['pr', 'edit', String(pr), '--add-label', AI_REVIEW_LABEL])
+  currentPrCache.clear()
 }
 
 function listPrSteps(root: string, key: string): Promise<IPrSteps[] | null> {
@@ -174,6 +222,10 @@ export function createGitProbe(root: string): IGitProbe {
         ':(exclude)vendor', ':(exclude)third_party', ':(exclude)node_modules', ':(exclude,glob)**/*.md',
       ]).catch(() => '')
       return parseTempMarkers(output)
+    },
+
+    currentPr(branch) {
+      return currentPrCache.get(`${root}\0${branch}`, () => fetchCurrentPr(root, branch))
     },
 
     async isBranchActive() {

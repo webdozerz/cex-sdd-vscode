@@ -159,7 +159,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('sddFlow.installPlugin', () => deps && installPlugin(deps)),
     vscode.commands.registerCommand('sddFlow.continue', () => deps && handleAction(deps, 'continue')),
     vscode.commands.registerCommand('sddFlow.specGap', () => deps && handleAction(deps, 'spec-gap')),
-    vscode.commands.registerCommand('sddFlow.specPr', () => deps && handleAction(deps, 'spec-pr')),
+    vscode.commands.registerCommand('sddFlow.specUpdate', () => deps && handleAction(deps, 'spec-update')),
     vscode.commands.registerCommand('sddFlow.verify', () => deps && handleAction(deps, 'verify')),
     vscode.commands.registerCommand('sddFlow.verifyFast', () => deps && handleAction(deps, 'verify-fast')),
     vscode.commands.registerCommand('sddFlow.resetChange', async () => {

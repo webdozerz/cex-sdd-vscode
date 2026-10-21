@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { proposalTitle } from '../src/core/change'
-import { parsePlan, parseSpecGaps, specPrCandidates } from '../src/core/plan'
+import { parsePlan, parseSpecGaps, specUpdateGaps } from '../src/core/plan'
 import { parseTasks } from '../src/core/tasks'
 
 const SAMPLE = `# Tasks
@@ -127,7 +127,6 @@ describe('parseSpecGaps', () => {
       blocks: 'шаги 2.1, 2.2',
       resolved: false,
       needsSpecUpdate: false,
-      specEdit: 'unknown',
       specPr: null,
     })
   })
@@ -138,38 +137,35 @@ describe('parseSpecGaps', () => {
   })
 })
 
-describe('поля «Правка спеки» и «PR спеки»', () => {
+describe('ссылка на правку change и заглушка решения', () => {
   const gaps = parseSpecGaps(`## 1. Окно подтверждения
-- **Правка спеки:** ui.md — окно в два шага
-- **Решение:** <заполняет тимлид>
-- **PR спеки:** —
+- **Решение:** _(тимлид)_
 
 ## 2. Частичное сохранение
-- **Правка спеки:** не нужна
-- **Решение:** <заполняет тимлид>
+- **Решение:** обновить change, вариант 2 → OpenSpec #57
 
 ## 3. Нет прав
 - **Решение:** обновить change, вариант 1
-- **PR спеки:** https://github.com/org/specs/pull/42
+- **PR спеки:** https://github.com/CryptoExch/OpenSpec/pull/42
 
-## 4. Старый формат
+## 4. Подтверждение
 - **Решение:** обновить change
 
 ## 5. Баг
 - **Решение:** баг кода
 `)
 
-  it('читает правку и PR', () => {
-    expect(gaps.map((gap) => [gap.n, gap.specEdit, gap.specPr])).toEqual([
-      ['1', 'needed', null],
-      ['2', 'not-needed', null],
-      ['3', 'unknown', 'https://github.com/org/specs/pull/42'],
-      ['4', 'unknown', null],
-      ['5', 'unknown', null],
+  it('«_(тимлид)_» — решения нет; ссылка из «Решения» и из старого поля «PR спеки»', () => {
+    expect(gaps.map((gap) => [gap.n, gap.resolved, gap.specPr])).toEqual([
+      ['1', false, null],
+      ['2', true, 'OpenSpec #57'],
+      ['3', true, 'OpenSpec #42'],
+      ['4', true, null],
+      ['5', true, null],
     ])
   })
 
-  it('PR предлагается: открыто с правкой, решено «обновить change» без PR; не предлагается: правка не нужна, PR есть, баг кода', () => {
-    expect(specPrCandidates(gaps).map((gap) => gap.n)).toEqual(['1', '4'])
+  it('в OpenSpec вносится только «обновить change» без ссылки', () => {
+    expect(specUpdateGaps(gaps).map((gap) => gap.n)).toEqual(['4'])
   })
 })

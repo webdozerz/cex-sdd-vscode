@@ -1,5 +1,6 @@
+import type { IAiReview } from './aireview'
 import { isFixBranch } from './branch'
-import { specPrCandidates } from './plan'
+import { specUpdateGaps } from './plan'
 import { MIN_PLUGIN_VERSION, PLUGIN_NAME, PLUGIN_OK, type IPluginStatus } from './plugin'
 import type {
   IAction,
@@ -31,7 +32,7 @@ const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 } as const
 const ACTION_VERIFY_FAST: IAction = { id: 'verify-fast', label: 'Быстрая проверка' }
 const ACTION_VERIFY: IAction = { id: 'verify', label: 'Полная проверка (verify)' }
 const ACTION_SPEC_GAP: IAction = { id: 'spec-gap', label: 'Расхождение со спекой' }
-const ACTION_SPEC_PR: IAction = { id: 'spec-pr', label: 'Предложить PR с правкой спеки' }
+const ACTION_SPEC_UPDATE: IAction = { id: 'spec-update', label: 'Обновить change в OpenSpec (/cex-sdd:spec-update)' }
 
 interface IFlowContext {
   repoId: TRepoId | null
@@ -40,6 +41,8 @@ interface IFlowContext {
   plugin?: IPluginStatus
   /** В ветке задачи есть изменения относительно develop. */
   branchActive?: boolean
+  /** AI-ревью PR текущей ветки. */
+  aiReview?: IAiReview | null
 }
 
 /** Для tier 1–2 design.md и plan.md уходят отдельным PR до кода; tier 3 — в одном PR с кодом. */
@@ -109,6 +112,21 @@ function tempExceptionBlockers(state: IChangeState): IBlocker[] {
     })
   }
   return blockers
+}
+
+/**
+ * Задачи своей группы tasks.md, которые пора отметить в OpenSpec: все шаги раздела плана «tasks.md N.M» смержены,
+ * а в спеке задача не отмечена. Без отметок change не архивируется; отмечает лид скиллом /cex-sdd:spec-update.
+ */
+export function tasksToTick(state: IChangeState, repoId: TRepoId | null): string[] {
+  const group = findGroup(state, repoId)
+  if (!group || !state.plan) return []
+  const merged = new Set(
+    state.plan.tasks
+      .filter((task) => task.id && task.steps.length > 0 && task.steps.every((step) => step.state === 'merged'))
+      .map((task) => task.id),
+  )
+  return group.items.filter((item) => !item.done && merged.has(item.id)).map((item) => item.id)
 }
 
 function isRepoOutside(state: IChangeState, repoId: TRepoId | null): boolean {
@@ -239,31 +257,37 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
   }
 
   const gapsFile = `${state.designDir}/spec-gaps.md`
-  const canPropose = new Set(specPrCandidates(state.gaps).map((gap) => gap.n))
+  const toUpdate = new Set(specUpdateGaps(state.gaps).map((gap) => gap.n))
   for (const gap of state.gaps) {
     const blocks = gap.blocks ? `Блокирует: ${gap.blocks}. ` : ''
     if (!gap.resolved) {
-      const pr = gap.specPr
-        ? ` PR с правкой спеки: ${gap.specPr}.`
-        : canPropose.has(gap.n)
-          ? ' Можно предложить PR с правкой спеки — кнопка выше.'
-          : ''
       blockers.push({
         id: `spec-gap-${gap.n}`,
         severity: 'warning',
         title: `Расхождение со спекой №${gap.n}: ${gap.title}`,
-        hint: `${blocks}Ждёт решения тимлида (поле «Решение» в spec-gaps.md).${pr}`,
+        hint: `${blocks}Ждёт решения тимлида (поле «Решение» в spec-gaps.md). Если решат «обновить change» — лид вносит правку в OpenSpec скиллом /cex-sdd:spec-update`,
         file: gapsFile,
       })
-    } else if (gap.needsSpecUpdate && canPropose.has(gap.n)) {
+    } else if (toUpdate.has(gap.n)) {
       blockers.push({
-        id: `spec-pr-missing-${gap.n}`,
+        id: `spec-update-missing-${gap.n}`,
         severity: 'warning',
-        title: `Расхождение №${gap.n}: решено обновить change, PR со спекой нет`,
-        hint: `${blocks}Подготовьте PR в репозиторий спек — кнопка «Предложить PR с правкой спеки» — или передайте правку аналитику. После мержа — обновить спеки отдельным коммитом`,
+        title: `Расхождение №${gap.n}: решено обновить change, правки в OpenSpec нет`,
+        hint: `${blocks}Код с отступлением от спеки не мержится, пока правка change не открыта. Лид — кнопка «Обновить change в OpenSpec» (/cex-sdd:spec-update, нужно право записи в OpenSpec); в PR кода — строка «Правка спеки: OpenSpec#NNN»`,
         file: gapsFile,
       })
     }
+  }
+
+  const unticked = tasksToTick(state, repoId)
+  if (unticked.length > 0) {
+    blockers.push({
+      id: 'tasks-unticked',
+      severity: 'info',
+      title: `Не отмечены в tasks.md OpenSpec: ${unticked.join(', ')}`,
+      hint: 'Шаги плана этих задач смержены. Без отметок change не архивируется: лид отмечает задачи своей группы скиллом /cex-sdd:spec-update. Если они уже отмечены в OpenSpec — обновите спеки',
+      file: `${state.specDir}/tasks.md`,
+    })
   }
 
   blockers.push(...tempExceptionBlockers(state))
@@ -323,7 +347,12 @@ function findCurrentStep(state: IChangeState, ctx: IFlowContext): (ILocatedStep 
   return firstFree ? { ...firstFree, exact: false } : null
 }
 
-function computeNext(state: IChangeState, blockers: IBlocker[], current: ILocatedStep | null = null): string | null {
+function computeNext(
+  state: IChangeState,
+  ctx: IFlowContext,
+  blockers: IBlocker[],
+  current: ILocatedStep | null = null,
+): string | null {
   const firstError = blockers.find((blocker) => blocker.severity === 'error')
   if (firstError) return `Снять стоппер: ${firstError.title}`
   if (state.archived) return 'Change в архиве, работа завершена'
@@ -343,11 +372,13 @@ function computeNext(state: IChangeState, blockers: IBlocker[], current: ILocate
   if (current) return `Закончить текущий шаг и открыть PR: в описании «Шаги plan.md» с id этого шага`
   const waiting = [...new Set(planSteps.filter((step) => step.state === 'review').map((step) => step.branch))]
   if (waiting.length > 0) return `Все шаги взяты в работу, ждут мержа PR: ${waiting.join(', ')}`
+  const unticked = tasksToTick(state, ctx.repoId)
+  if (unticked.length > 0) return `Отметить сданные задачи в tasks.md OpenSpec (${unticked.join(', ')}): лид, /cex-sdd:spec-update`
   if (isCodeDone(state)) return `Открыть PR в develop: заголовок «${state.key}: …», метка ai-assisted`
   return null
 }
 
-function computeActions(state: IChangeState, blockers: IBlocker[]): IAction[] {
+function computeActions(state: IChangeState, ctx: IFlowContext, blockers: IBlocker[]): IAction[] {
   if (!state.specsAvailable) return [{ id: 'init-specs', label: 'Подключить спеки', primary: true }]
   if (state.specDir === null) {
     return [
@@ -365,7 +396,11 @@ function computeActions(state: IChangeState, blockers: IBlocker[]): IAction[] {
       : 'Продолжить change'
   const actions: IAction[] = [{ id: 'continue', label, primary: !blockers.some((b) => b.severity === 'error') }]
   actions.push(ACTION_SPEC_GAP)
-  if (specPrCandidates(state.gaps).length > 0) actions.push(ACTION_SPEC_PR)
+  if (specUpdateGaps(state.gaps).length > 0 || tasksToTick(state, ctx.repoId).length > 0) actions.push(ACTION_SPEC_UPDATE)
+  const review = ctx.aiReview
+  if (review && review.state !== 'draft' && review.state !== 'running') {
+    actions.push({ id: 'ai-review', label: review.state === 'not-run' ? 'Запустить AI-ревью' : 'Перезапустить AI-ревью' })
+  }
   actions.push(ACTION_VERIFY_FAST, ACTION_VERIFY)
   return actions
 }
@@ -397,7 +432,7 @@ export function pluginBlockers(plugin: IPluginStatus = PLUGIN_OK): IBlocker[] {
           id: 'plugin-outdated',
           severity: 'warning',
           title: `Плагин ${PLUGIN_NAME} ${plugin.version ?? ''} устарел (нужна ${MIN_PLUGIN_VERSION} или новее)`,
-          hint: 'Старые версии берут в ветку, коммиты и PR ключ родителя вместо ключа подзадачи своего репозитория',
+          hint: 'В старых версиях нет /cex-sdd:spec-update (правка change и отметка задач в OpenSpec), а до 0.6.0 в ветку и PR шёл ключ родителя вместо подзадачи',
         },
       ]
     default:
@@ -475,7 +510,10 @@ export function buildFlow(state: IChangeState, context: IFlowContext): IChangeFl
     areas: state.affectedAreas,
     plansLocation: state.plansLocation,
     plansDir: state.designDir,
-    specPrCandidates: specPrCandidates(state.gaps).map((gap) => ({ n: gap.n, title: gap.title })),
+    specUpdate: {
+      gaps: specUpdateGaps(state.gaps).map((gap) => ({ n: gap.n, title: gap.title })),
+      tasks: tasksToTick(state, context.repoId),
+    },
     steps,
     blockers,
     plan: state.plan
@@ -495,7 +533,8 @@ export function buildFlow(state: IChangeState, context: IFlowContext): IChangeFl
     scopeTasks: group ? group.items.length : null,
     tempMarkers: state.tempMarkers,
     currentStep: current ? { title: stepTitle(current.text), section: current.section, exact: current.exact } : null,
-    actions: withPluginAction(computeActions(state, blockers), context.plugin),
-    next: computeNext(state, blockers, current),
+    aiReview: context.aiReview ?? null,
+    actions: withPluginAction(computeActions(state, context, blockers), context.plugin),
+    next: computeNext(state, context, blockers, current),
   }
 }

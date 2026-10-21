@@ -14,7 +14,7 @@ const FLOW: IChangeFlow = {
   areas: ['client-fe'],
   plansLocation: 'code',
   plansDir: 'docs/changes/tn-123-x',
-  specPrCandidates: [],
+  specUpdate: { gaps: [], tasks: [] },
   steps: [{ id: 'spec', title: 'Спека', status: 'done' }],
   blockers: [{ id: 'b', severity: 'error', title: '<script>alert(1)</script>', file: 'a"b.md' }],
   plan: {
@@ -29,6 +29,7 @@ const FLOW: IChangeFlow = {
   scopeTasks: 2,
   tempMarkers: [],
   currentStep: null,
+  aiReview: null,
   actions: [
     { id: 'continue', label: 'Продолжить по плану', primary: true },
     { id: 'spec-gap', label: 'Расхождение со спекой' },

@@ -6,8 +6,8 @@ export const MARKETPLACE_NAME = 'crypton'
 export const PLUGIN_ID = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`
 export const MARKETPLACE_SOURCE = 'git@github.com:CryptonStudio/AI-Marketplace.git'
 
-/** С этой версии `/cex-sdd:apply` берёт ключ подзадачи репозитория, а не родителя. */
-export const MIN_PLUGIN_VERSION = '0.6.0'
+/** С 0.6.0 `/cex-sdd:apply` берёт ключ подзадачи, с 0.7.0 есть `/cex-sdd:spec-update`. */
+export const MIN_PLUGIN_VERSION = '0.7.0'
 
 export type TPluginState =
   /** Установлен, включён, версия не ниже минимальной. */

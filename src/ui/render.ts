@@ -1,3 +1,4 @@
+import type { TAiReviewState } from '../core/aireview'
 import type { IAction, IBlocker, IChangeFlow, IFlowStep, TFlowModel, TStepStatus } from '../core/types'
 
 export function escapeHtml(value: string): string {
@@ -119,6 +120,24 @@ function renderCurrentStep(flow: IChangeFlow): string {
     </div>`
 }
 
+const AI_REVIEW_TEXT: Record<TAiReviewState, { text: string; link?: string }> = {
+  draft: { text: 'черновик: AI-ревью запустится, когда PR станет Ready for review' },
+  running: { text: 'идёт AI-ревью', link: 'Ход прогона' },
+  done: { text: 'замечания AI-ревью готовы', link: 'Открыть комментарий' },
+  'no-comment': { text: 'прогон прошёл без комментария: возможно, в репозитории не задан секрет Claude', link: 'Лог прогона' },
+  failed: { text: 'AI-ревью упало', link: 'Лог прогона' },
+  'not-run': { text: 'AI-ревью не запускалось' },
+}
+
+function renderAiReview(flow: IChangeFlow): string {
+  const review = flow.aiReview
+  if (!review) return ''
+  const { text, link } = AI_REVIEW_TEXT[review.state]
+  const pr = `<button class="link" data-url="${escapeHtml(review.prUrl)}">PR #${review.pr}</button>`
+  const more = link && review.url ? ` <button class="link" data-url="${escapeHtml(review.url)}">${escapeHtml(link)}</button>` : ''
+  return `<h2>AI-ревью</h2><p class="review review_${review.state}">${pr} — ${escapeHtml(text)}${more}</p>`
+}
+
 function renderTempMarkers(flow: IChangeFlow): string {
   if (flow.tempMarkers.length === 0) return ''
   const items = flow.tempMarkers
@@ -158,6 +177,7 @@ function renderChange(flow: IChangeFlow): string {
     <ol class="steps">${flow.steps.map(renderStep).join('')}</ol>
     <h2>Что блокирует</h2>${blockers}
     ${renderCurrentStep(flow)}
+    ${renderAiReview(flow)}
     ${renderPlan(flow)}
     ${renderTempMarkers(flow)}
     ${next}`
@@ -222,6 +242,8 @@ const STYLE = `
   .current__section, .current__source { margin-top: 2px; font-size: 12px; color: var(--vscode-descriptionForeground); }
   .badge { margin-inline-start: 6px; padding: 0 6px; border-radius: 8px; font-size: 10px; font-weight: 600; background: var(--vscode-charts-blue); color: var(--vscode-button-foreground); }
   .progress_active .progress__head { font-weight: 600; }
+  .review { margin: 0; line-height: 1.5; }
+  .review .link { margin-top: 0; }
   .temp { margin-bottom: 6px; }
   .temp__text { font-size: 12px; color: var(--vscode-descriptionForeground); }
   .plan__legend, .plan__review { margin: 0 0 8px; font-size: 12px; }
@@ -243,6 +265,7 @@ const SCRIPT = `
     const target = event.target instanceof Element ? event.target.closest('button') : null
     if (!target) return
     if (target.dataset.open) vscode.postMessage({ type: 'open', path: target.dataset.open })
+    if (target.dataset.url) vscode.postMessage({ type: 'url', url: target.dataset.url })
     if (target.dataset.action) vscode.postMessage({ type: 'action', id: target.dataset.action })
   })
 `

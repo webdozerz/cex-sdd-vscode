@@ -32,11 +32,11 @@ describe('compareVersions', () => {
 describe('readPluginStatus', () => {
   it('установлен, включён, версия достаточная → ok', () => {
     const result = status({
-      [`${PLUGINS}/installed_plugins.json`]: INSTALLED('0.6.0'),
+      [`${PLUGINS}/installed_plugins.json`]: INSTALLED('0.7.0'),
       [`${PLUGINS}/known_marketplaces.json`]: MARKETPLACES,
       '.claude/settings.json': ENABLED(true),
     })
-    expect(result).toEqual({ state: 'ok', version: '0.6.0', commands: [] })
+    expect(result).toEqual({ state: 'ok', version: '0.7.0', commands: [] })
   })
 
   it('плагин установлен, настройки про него молчат → ok', () => {
@@ -72,12 +72,12 @@ describe('readPluginStatus', () => {
   })
 
   it('выключен в пользовательских настройках → disabled', () => {
-    const result = status({ [`${PLUGINS}/installed_plugins.json`]: INSTALLED('0.6.0'), '.claude/settings.json': ENABLED(false) })
+    const result = status({ [`${PLUGINS}/installed_plugins.json`]: INSTALLED('0.7.0'), '.claude/settings.json': ENABLED(false) })
     expect(result).toMatchObject({ state: 'disabled', commands: ['claude plugin enable cex-sdd@crypton'] })
   })
 
   it('проектные настройки перекрывают пользовательские', () => {
-    const home = { [`${PLUGINS}/installed_plugins.json`]: INSTALLED('0.6.0'), '.claude/settings.json': ENABLED(false) }
+    const home = { [`${PLUGINS}/installed_plugins.json`]: INSTALLED('0.7.0'), '.claude/settings.json': ENABLED(false) }
     expect(status(home, { '.claude/settings.json': ENABLED(true) }).state).toBe('ok')
     expect(
       status({ ...home, '.claude/settings.json': ENABLED(true) }, { '.claude/settings.local.json': ENABLED(false) }).state,
@@ -108,16 +108,16 @@ describe('выбор установки как в Claude Code', () => {
       [`${PLUGINS}/installed_plugins.json`]: entries([
         { scope: 'user', version: '0.5.0' },
         { scope: 'project', projectPath: '/other/repo', version: '0.4.0' },
-        { scope: 'project', projectPath: `${project}/`, version: '0.6.0' },
+        { scope: 'project', projectPath: `${project}/`, version: '0.7.0' },
       ]),
     })
-    expect(readPluginStatus(home, project)).toMatchObject({ state: 'ok', version: '0.6.0' })
+    expect(readPluginStatus(home, project)).toMatchObject({ state: 'ok', version: '0.7.0' })
   })
 
   it('чужой проект не учитывается: берётся пользовательская', () => {
     const home = makeProject({
       [`${PLUGINS}/installed_plugins.json`]: entries([
-        { scope: 'project', projectPath: '/other/repo', version: '0.6.0' },
+        { scope: 'project', projectPath: '/other/repo', version: '0.7.0' },
         { scope: 'user', version: '0.5.0' },
       ]),
     })
@@ -128,10 +128,10 @@ describe('выбор установки как в Claude Code', () => {
     const home = makeProject({
       [`${PLUGINS}/installed_plugins.json`]: entries([
         { scope: 'local', projectPath: '/a', version: '0.5.0' },
-        { scope: 'local', projectPath: '/b', version: '0.6.1' },
+        { scope: 'local', projectPath: '/b', version: '0.7.1' },
       ]),
     })
-    expect(readPluginStatus(home, project)).toMatchObject({ state: 'ok', version: '0.6.1' })
+    expect(readPluginStatus(home, project)).toMatchObject({ state: 'ok', version: '0.7.1' })
   })
 })
 
