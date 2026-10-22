@@ -150,6 +150,22 @@ function renderAiReview(flow: IChangeFlow): string {
   return `<h2>AI-ревью</h2><p class="review review_${review.state}">${pr} — ${escapeHtml(text)}${more}</p>`
 }
 
+function renderStack(flow: IChangeFlow): string {
+  const items = flow.stack?.items ?? []
+  if (items.length === 0) return ''
+  const rows = [...items]
+    .reverse()
+    .map((item) => {
+      const pr = item.pr === null ? 'PR ещё нет' : `#${item.pr}`
+      const badge = item.current ? '<span class="badge">эта ветка</span>' : ''
+      return `<li class="stack__item${item.current ? ' stack__item_current' : ''}"><code>${escapeHtml(item.branch)}</code> · ${escapeHtml(pr)}${badge}</li>`
+    })
+    .join('')
+  return `<h2>Стек веток</h2>
+    <p class="muted stack__legend">Сверху вниз: каждая ветка — от нижней, PR — с её базой; нижний — в develop</p>
+    <ol class="stack">${rows}</ol>`
+}
+
 function renderTempMarkers(flow: IChangeFlow): string {
   if (flow.tempMarkers.length === 0) return ''
   const items = flow.tempMarkers
@@ -190,6 +206,7 @@ function renderChange(flow: IChangeFlow): string {
     <h2>Что блокирует</h2>${blockers}
     ${renderCurrentStep(flow)}
     ${renderAiReview(flow)}
+    ${renderStack(flow)}
     ${renderPlan(flow)}
     ${renderTempMarkers(flow)}
     ${next}`
@@ -262,6 +279,9 @@ const STYLE = `
   .progress_active .progress__head { font-weight: 600; }
   .review { margin: 0; line-height: 1.5; }
   .review .link { margin-top: 0; }
+  .stack__legend { margin: 0 0 6px; font-size: 12px; }
+  .stack__item { padding: 3px 0 3px 10px; border-left: 2px solid var(--vscode-editorGroup-border); font-size: 12px; }
+  .stack__item_current { border-left-color: var(--vscode-charts-blue); font-weight: 600; }
   .temp { margin-bottom: 6px; }
   .temp__text { font-size: 12px; color: var(--vscode-descriptionForeground); }
   .plan__legend, .plan__review { margin: 0 0 8px; font-size: 12px; }

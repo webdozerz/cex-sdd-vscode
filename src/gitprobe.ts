@@ -186,10 +186,22 @@ async function fetchPrSteps(root: string, key: string): Promise<IPrSteps[] | nul
     const output = await run('gh', root, [
       'pr', 'list', '--state', 'all', '--limit', '100',
       '--search', `${key} in:title`,
-      '--json', 'number,state,headRefName,body',
+      '--json', 'number,state,headRefName,baseRefName,body',
     ])
-    const prs = JSON.parse(output) as Array<{ number: number; state: IPrSteps['state']; headRefName: string; body: string }>
-    return prs.map((pr) => ({ number: pr.number, state: pr.state, branch: pr.headRefName, steps: parsePrSteps(pr.body ?? '') }))
+    const prs = JSON.parse(output) as Array<{
+      number: number
+      state: IPrSteps['state']
+      headRefName: string
+      baseRefName: string
+      body: string
+    }>
+    return prs.map((pr) => ({
+      number: pr.number,
+      state: pr.state,
+      branch: pr.headRefName,
+      base: pr.baseRefName,
+      steps: parsePrSteps(pr.body ?? ''),
+    }))
   } catch {
     return null
   }
@@ -246,7 +258,7 @@ export function createGitProbe(root: string): IGitProbe {
       }
       const path = `docs/changes/${change}/plan.md`
       const show = (ref: string): Promise<string | null> => gitRead(root, ['show', `${ref}:${path}`]).catch(() => null)
-      const branches: Array<{ name: string; text: string }> = []
+      const branches: Array<{ name: string; text: string; below: boolean; ahead: number }> = []
       if (key) {
         const refs = await gitRead(root, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes/origin']).catch(() => '')
         const wanted = key.toUpperCase()
@@ -255,9 +267,17 @@ export function createGitProbe(root: string): IGitProbe {
           if (!ref || ref === own || ref === 'origin/develop' || ref.endsWith('/HEAD')) continue
           if (!ref.toUpperCase().includes(wanted)) continue
           const text = await show(ref)
-          if (text !== null) branches.push({ name: ref.replace(/^origin\//, ''), text })
+          if (text === null) continue
+          // Стек веток: текущая ветка стоит на этой, а в develop её ещё нет — галочки унаследованы, шаги сделаны ниже по стеку.
+          const isAncestor = (of: string): Promise<boolean> =>
+            gitRead(root, ['merge-base', '--is-ancestor', ref, of]).then(() => true, () => false)
+          const below = (await isAncestor('HEAD')) && !(await isAncestor('origin/develop'))
+          const ahead = Number((await gitRead(root, ['rev-list', '--count', `origin/develop..${ref}`]).catch(() => '0')).trim()) || 0
+          branches.push({ name: ref.replace(/^origin\//, ''), text, below, ahead })
         }
       }
+      // Снизу вверх: чем меньше коммитов поверх develop, тем ниже ветка в стеке.
+      branches.sort((a, b) => a.ahead - b.ahead)
       return { develop: await show('origin/develop'), branches, prs: key ? await listPrSteps(root, key) : null }
     },
 

@@ -36,9 +36,9 @@ describe('id шагов и PR (решение 1В)', () => {
 
   it('состояние шага берётся из PR, plan.md не правится', () => {
     const prs: IPrSteps[] = [
-      { number: 370, state: 'MERGED', branch: 'feat/TN-1485-liquidity-base', steps: ['base'] },
-      { number: 371, state: 'OPEN', branch: 'feat/TN-1485-modal-test-ids', steps: ['modals'] },
-      { number: 360, state: 'CLOSED', branch: 'feat/TN-1485-old', steps: ['integration'] },
+      { number: 370, state: 'MERGED', branch: 'feat/TN-1485-liquidity-base', base: 'develop', steps: ['base'] },
+      { number: 371, state: 'OPEN', branch: 'feat/TN-1485-modal-test-ids', base: 'develop', steps: ['modals'] },
+      { number: 360, state: 'CLOSED', branch: 'feat/TN-1485-old', base: 'develop', steps: ['integration'] },
     ]
     const other = mergePlan(parsePlan(PLAN), { develop: PLAN, branches: [], prs }, null, 'feat/TN-1485-venues')
     expect(other.tasks.flatMap((t) => t.steps.map((s) => [s.stepId, s.state, s.branch ?? null]))).toEqual([

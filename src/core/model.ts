@@ -8,6 +8,7 @@ import { buildFlow, noKeyActions, pluginBlockers } from './flow'
 import type { IPluginStatus } from './plugin'
 import type { ISpecsSync } from './specsync'
 import { mergePlan, type IPlanSources } from './planmerge'
+import { buildStack, type IStack } from './stack'
 import type { ITempMarker, TFlowModel } from './types'
 
 /** То, что можно узнать только у git: проект может подставить свою реализацию (в тестах — фальшивую). */
@@ -83,10 +84,16 @@ export async function loadFlowModel(input: ILoadModelInput): Promise<TFlowModel>
     repoId,
     ...(input.plansSetting ? { plansSetting: input.plansSetting } : {}),
   })
+  let stack: IStack | null = null
   if (state.plan && state.changeName && git.planSources) {
     const specPlanPath = state.plansLocation === 'spec' && state.designDir ? `${state.designDir}/plan.md` : undefined
     const sources = await git.planSources(state.changeName, branchKey, input.branch, specPlanPath)
     state.plan = mergePlan(state.plan, sources, state.designMerged, input.branch)
+    stack = buildStack(
+      sources.prs,
+      input.branch,
+      sources.branches.filter((branch) => branch.below).map((branch) => branch.name),
+    )
   }
   if (state.changeName && git.tempMarkers) {
     const own = new Set([state.key, state.jira].filter(Boolean).map((key) => String(key).toUpperCase()))
@@ -97,5 +104,5 @@ export async function loadFlowModel(input: ILoadModelInput): Promise<TFlowModel>
   const hasAiReview = existsSync(join(input.root, AI_REVIEW_WORKFLOW_FILE))
   const aiReview = hasAiReview && input.branch && git.currentPr ? aiReviewStatus(await git.currentPr(input.branch)) : null
   const specsSync = specsAvailable && git.specsSync ? await git.specsSync(state.archived ? null : state.changeName) : null
-  return buildFlow(state, { repoId, branch: input.branch, plugin: input.plugin, branchActive, aiReview, specsSync })
+  return buildFlow(state, { repoId, branch: input.branch, plugin: input.plugin, branchActive, aiReview, specsSync, stack })
 }

@@ -29,6 +29,7 @@ const FLOW: IChangeFlow = {
   scopeTasks: 2,
   tempMarkers: [],
   currentStep: null,
+  stack: null,
   aiReview: null,
   actions: [
     { id: 'continue', label: 'Продолжить по плану', primary: true },

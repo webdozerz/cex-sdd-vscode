@@ -1,5 +1,6 @@
 import type { IAiReview } from './aireview'
 import type { ISpecsSync } from './specsync'
+import { BASE_BRANCH, type IStack } from './stack'
 import { isFixBranch } from './branch'
 import { specUpdateGaps } from './plan'
 import { MIN_PLUGIN_VERSION, PLUGIN_NAME, PLUGIN_OK, type IPluginStatus } from './plugin'
@@ -49,6 +50,8 @@ interface IFlowContext {
   aiReview?: IAiReview | null
   /** Сабмодуль спек против ветки и main OpenSpec. */
   specsSync?: ISpecsSync | null
+  /** Стек веток задачи по открытым PR. */
+  stack?: IStack | null
 }
 
 /** Для tier 1–2 design.md и plan.md уходят отдельным PR до кода; tier 3 — в одном PR с кодом. */
@@ -368,6 +371,16 @@ function computeBlockers(state: IChangeState, ctx: IFlowContext): IBlocker[] {
     })
   }
 
+  for (const { pr, base } of ctx.stack?.retarget ?? []) {
+    blockers.push({
+      id: `stack-retarget-${pr}`,
+      severity: 'warning',
+      title: `PR #${pr} нацелен на уже смерженную ветку ${base}`,
+      hint: 'Стек веток: нижний PR смержен в develop, а следующий всё ещё нацелен на его ветку и после мержа попадёт не в develop',
+      todo: `Перенацельте PR #${pr} на ${BASE_BRANCH} командой из CLAUDE.md репозитория, например gh pr edit ${pr} --base ${BASE_BRANCH}. Это делает разработчик или лид`,
+    })
+  }
+
   blockers.push(...tempExceptionBlockers(state))
 
   if (state.acceptance.exists && !state.acceptance.accepted) {
@@ -447,6 +460,11 @@ function computeNext(
   }
   const planSteps = state.plan?.tasks.flatMap((task) => task.steps) ?? []
   const openStep = planSteps.find((step) => !step.done && step.text !== current?.text)
+  const top = ctx.stack?.items[ctx.stack.items.length - 1]
+  if (openStep && top) {
+    // Стек веток: следующий шаг — новая ветка от верха стека, PR с базой этой ветки.
+    return `Следующий шаг — новая ветка от ${top.current ? 'этой ветки' : top.branch} (верх стека), PR с базой ${top.branch}: ${openStep.text}`
+  }
   if (openStep) return `${current ? 'Следующий шаг после текущего' : 'Следующий свободный шаг плана'}: ${openStep.text}`
   if (current) return `Закончить текущий шаг и открыть PR: в описании «Шаги plan.md» с id этого шага`
   const waiting = [...new Set(planSteps.filter((step) => step.state === 'review').map((step) => step.branch))]
@@ -622,6 +640,7 @@ export function buildFlow(state: IChangeState, context: IFlowContext): IChangeFl
     scopeTasks: group ? group.items.length : null,
     tempMarkers: state.tempMarkers,
     currentStep: current ? { title: stepTitle(current.text), section: current.section, exact: current.exact } : null,
+    stack: context.stack?.items.length ? context.stack : null,
     aiReview: context.aiReview ?? null,
     actions: withPluginAction(computeActions(state, context, blockers), context.plugin),
     next: computeNext(state, context, blockers, current),

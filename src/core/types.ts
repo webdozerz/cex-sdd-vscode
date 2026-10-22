@@ -1,4 +1,5 @@
 import type { IAiReview } from './aireview'
+import type { IStack } from './stack'
 
 export const REPO_IDS = ['exchange', 'client-fe', 'admin-fe', 'qa-tests'] as const
 
@@ -68,6 +69,8 @@ export interface IPrSteps {
   number: number
   state: 'MERGED' | 'OPEN' | 'CLOSED'
   branch: string
+  /** База PR: develop или, в стеке веток, ветка предыдущего шага. */
+  base: string
   steps: string[]
 }
 
@@ -224,6 +227,8 @@ export interface IChangeFlow {
   scopeTasks: number | null
   tempMarkers: ITempMarker[]
   currentStep: ICurrentStep | null
+  /** Стек веток задачи (каждая ветка — от предыдущей); null — PR идут каждый в develop или gh недоступен. */
+  stack: IStack | null
   /** AI-ревью PR текущей ветки; null — workflow нет, PR нет или gh недоступен. */
   aiReview: IAiReview | null
   actions: IAction[]

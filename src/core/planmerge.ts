@@ -1,10 +1,15 @@
 import { parsePlan } from './plan'
+import { BASE_BRANCH } from './stack'
 import type { IPlan, IPlanStep, IPrSteps, TPlanStepState } from './types'
 
 /** plan.md этого change в develop и в других ветках задачи (каждый шаг плана — свой PR и своя ветка). */
 export interface IPlanSources {
   develop: string | null
-  branches: Array<{ name: string; text: string }>
+  /**
+   * Другие ветки задачи, снизу вверх по стеку (меньше коммитов поверх develop — ниже).
+   * below — текущая ветка стоит на этой (стек веток): отмеченное там сделано ниже по стеку, а не здесь.
+   */
+  branches: Array<{ name: string; text: string; below?: boolean }>
   /** PR задачи со списком шагов из описания; null — gh недоступен. */
   prs?: IPrSteps[] | null
 }
@@ -20,7 +25,10 @@ function stateFromPrs(
 ): { state: TPlanStepState; branch?: string } | undefined {
   if (!stepId || !prs) return undefined
   const related = prs.filter((pr) => pr.steps.includes(stepId))
-  if (related.some((pr) => pr.state === 'MERGED')) return { state: 'merged' }
+  if (related.some((pr) => pr.state === 'MERGED' && pr.base === BASE_BRANCH)) return { state: 'merged' }
+  // Смержен в ветку стека, а не в develop: шаг пока в PR ниже по стеку.
+  const intoStack = related.find((pr) => pr.state === 'MERGED')
+  if (intoStack) return { state: 'review', branch: `#${intoStack.number} → ${intoStack.base}` }
   const open = related.find((pr) => pr.state === 'OPEN')
   if (!open) return undefined
   return open.branch === currentBranch ? { state: 'local' } : { state: 'review', branch: `#${open.number} ${open.branch}` }
@@ -76,10 +84,19 @@ export function mergePlan(
   // Сначала совпадение по тексту, потом по позиции: текстовое надёжнее, позиционное ловит переформулированный шаг.
   const inBranchesByText = new Map<string, string>()
   const inBranchesByPosition = new Map<string, string>()
-  for (const { name, text } of sources.branches) {
+  // Ветки ниже по стеку: текущая ветка унаследовала их plan.md вместе с галочками.
+  const belowByText = new Map<string, string>()
+  const belowByPosition = new Map<string, string>()
+  for (const { name, text, below } of sources.branches) {
     const keys = checkedKeys(text)
-    for (const key of keys.byText) if (!inBranchesByText.has(key)) inBranchesByText.set(key, name)
-    for (const key of keys.byPosition) if (!inBranchesByPosition.has(key)) inBranchesByPosition.set(key, name)
+    for (const key of keys.byText) {
+      if (!inBranchesByText.has(key)) inBranchesByText.set(key, name)
+      if (below && !belowByText.has(key)) belowByText.set(key, name)
+    }
+    for (const key of keys.byPosition) {
+      if (!inBranchesByPosition.has(key)) inBranchesByPosition.set(key, name)
+      if (below && !belowByPosition.has(key)) belowByPosition.set(key, name)
+    }
   }
 
   const tasks = local.tasks.map((task) => ({
@@ -88,6 +105,7 @@ export function mergePlan(
       const key = stepKey(step.text)
       const position = positionKey(task.title, index)
       const reviewBranch = inBranchesByText.get(key) ?? inBranchesByPosition.get(position)
+      const belowBranch = belowByText.get(key) ?? belowByPosition.get(position)
       const fromPrs = stateFromPrs(step.stepId, sources.prs, currentBranch)
       if (fromPrs) {
         return { ...step, done: true, state: fromPrs.state, ...(fromPrs.branch ? { branch: fromPrs.branch } : {}) }
@@ -95,9 +113,10 @@ export function mergePlan(
       let state: TPlanStepState = 'todo'
       if (merged.byText.has(key) || merged.byPosition.has(position) || (isDesignStep(step) && designMerged === true)) {
         state = 'merged'
-      } else if (step.done) state = 'local'
+      } else if (step.done && belowBranch) state = 'review'
+      else if (step.done) state = 'local'
       else if (reviewBranch) state = 'review'
-      const branch = state === 'review' ? reviewBranch : undefined
+      const branch = state === 'review' ? (belowBranch ?? reviewBranch) : undefined
       return { ...step, done: state !== 'todo', state, ...(branch ? { branch } : {}) }
     }),
   }))
